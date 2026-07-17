@@ -1,0 +1,51 @@
+name: Feature request
+description: Suggest something new
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+      description: Describe the situation you are stuck in, not only the solution.
+      placeholder: I render logos that use gradients, and they come out unpainted.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - SVG feature support
+        - Rendering quality
+        - Performance
+        - CLI
+        - Export
+        - Library API
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you have considered
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I have read the Known limitations section of the README
+          required: true
+        - label: I have searched existing issues
+          required: true

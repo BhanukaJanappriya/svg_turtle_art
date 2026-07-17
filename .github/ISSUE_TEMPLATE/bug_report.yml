@@ -1,0 +1,83 @@
+name: Bug report
+description: Something renders wrongly, or crashes
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report.
+
+        **If it is a rendering bug, please attach the SVG.** Nearly every one is
+        specific to a construct in a particular file, and without it we are
+        guessing.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+      placeholder: The circles render as octagons.
+    validations:
+      required: true
+
+  - type: textarea
+    id: svg
+    attributes:
+      label: The SVG
+      description: >
+        Attach the file, or paste a minimal fragment that reproduces it. If it is
+        confidential, a cut-down version showing the same problem is fine.
+    validations:
+      required: false
+
+  - type: input
+    id: command
+    attributes:
+      label: Command
+      placeholder: python main.py artwork.svg --scale 2 --theme dark
+    validations:
+      required: true
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Output of `--stats -v`
+      description: Run the same command with `--stats -v` and paste the output.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: A picture of the wrong output, and the correct one, help enormously.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Output of `python main.py --version`
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.12.1"
+    validations:
+      required: true
