@@ -1,0 +1,15 @@
+{
+  "canvas_width": 1400,
+  "canvas_height": 900,
+  "background": "#11131a",
+  "mono_color": "#e6e6e6",
+  "color_mode": "original",
+  "margin": 40,
+  "fit": "content",
+  "resolution": 1.5,
+  "simplify": 0.3,
+  "animate": true,
+  "fps": 60,
+  "hide_turtle": true,
+  "stats": true
+}

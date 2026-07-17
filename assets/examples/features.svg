@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" width="300" height="200">
+  <title>Compound-path holes and clipping</title>
+
+  <!-- A donut: an outer ring and an inner ring in one path. The hole is only
+       cut if the fill honours the even-odd rule across both sub-paths. -->
+  <path d="M 60 100 m -45 0 a 45 45 0 1 0 90 0 a 45 45 0 1 0 -90 0
+           M 60 100 m -20 0 a 20 20 0 1 0 40 0 a 20 20 0 1 0 -40 0"
+        fill="#2f6f9f" stroke="#123a55" stroke-width="2"/>
+
+  <!-- Only the left half of this red square should survive the clip. -->
+  <clipPath id="half">
+    <rect x="150" y="40" width="55" height="120"/>
+  </clipPath>
+  <rect x="150" y="40" width="120" height="120" fill="#d1495b" clip-path="url(#half)"/>
+
+  <!-- The unclipped outline, to show where the square would have been. -->
+  <rect x="150" y="40" width="120" height="120" fill="none" stroke="#999" stroke-width="1"/>
+</svg>
