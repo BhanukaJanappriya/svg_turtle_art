@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "svg-turtle-renderer"
+version = "0.1.0"
+description = "Render any SVG artwork with Python Turtle Graphics."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Bhanuka Janappriya" }]
+keywords = ["svg", "turtle", "graphics", "renderer", "vector"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Graphics",
+]
+dependencies = ["tqdm>=4.65"]
+
+[project.optional-dependencies]
+export = ["Pillow>=10.0"]
+dev = [
+    "pytest>=7.4",
+    "pytest-cov>=4.1",
+    "ruff>=0.4",
+    "mypy>=1.8",
+]
+
+[project.urls]
+Homepage = "https://github.com/bhanuka/svg-turtle-renderer"
+Issues = "https://github.com/bhanuka/svg-turtle-renderer/issues"
+
+[project.scripts]
+svg-turtle = "svg_turtle_renderer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+# Display tests are excluded from the default run and get their own process; see
+# the `display` marker below and the "Testing" section of CONTRIBUTING.md.
+addopts = "-m 'not display'"
+markers = [
+    """display: opens a real turtle window. Deselected by default because Tk's \
+global interpreter state is not reliable when hundreds of other tests share the \
+process. Run them on their own with: pytest -m display -s""",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "D"]
+ignore = ["D203", "D213"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_unused_ignores = true
+ignore_missing_imports = true
