@@ -66,7 +66,8 @@ something an even-odd backend can actually draw.
 - **`<use>`, `<defs>`, `<symbol>`** — including `xlink:href`, per-instance styling,
   and cycle detection.
 - **Pencil sketch mode** — watch a pencil trace the artwork from a blank canvas at
-  a steady hand-speed, then paint it in.
+  a steady hand-speed, with the colour then streaming in behind it rather than
+  snapping on.
 - **Auto-fit** — aspect-preserving scale-to-canvas, centring, margins, rotation,
   mirror and flip.
 - **Themes and colour modes** — original, monochrome, random; five presets.
@@ -196,6 +197,7 @@ print(len(canvas.fills), "fills,", len(canvas.strokes), "strokes")
 | `--pencil-color COLOR` | — | Pencil colour; default traces each shape's own ink |
 | `--pencil-width PX` | `1` | Pencil line width |
 | `--show-pencil` / `--no-show-pencil` | on | Show the pencil cursor |
+| `--fill-flow` / `--no-fill-flow` | on | Stream fills in instead of applying at once |
 | **Quality** | | |
 | `--resolution N` | `1.0` | Curve smoothness; higher is smoother, slower |
 | `--simplify PX` | `0` | Drop vertices within this many pixels of the line |
@@ -245,8 +247,8 @@ nothing below the parser knows what XML is.
   │               │                    │                 │
   │ svg_parser    │ coordinate_system  │ canvas  (proto) │
   │ path_parser   │ bezier             │ turtle_renderer │
-  │ color_parser  │ scaler             │ path_renderer   │
-  │ transform_... │ clipping           │ animation       │
+  │ color_parser  │ scaler   polyline  │ path_renderer   │
+  │ transform_... │ clipping banding   │ animation       │
   │               │ fill_rule          │                 │
   └───────────────┴────────────────────┴─────────────────┘
                            │
@@ -256,7 +258,7 @@ nothing below the parser knows what XML is.
 
 The seam that matters is `renderer/canvas.py`. `PathRenderer` draws against a
 `Canvas` **protocol**, never against turtle directly, so the entire pipeline runs
-headless against a `RecordingCanvas`. That is why 534 of the 535 tests need no
+headless against a `RecordingCanvas`. That is why 567 of the 568 tests need no
 display.
 
 ## The rendering pipeline
@@ -304,9 +306,10 @@ python main.py artwork.svg --sketch --duration 30
 *Mid-sketch, with the pencil at the tip of the line it is drawing — and the same
 drawing once it finishes and fills in.*
 
-The pencil traces every shape's outline, then the shape is painted behind it, so
-the drawing appears the way someone would actually make it: line first, ink after.
-Two details are what make it read as drawing rather than as a progress bar.
+The pencil traces every shape's outline, then the colour streams in behind it, so
+the drawing appears the way someone would actually make it: line first, ink after,
+and neither one snapping into place. Three details make it read as drawing rather
+than as a progress bar.
 
 **It paces by distance, not by vertices.** A flattened curve packs vertices
 tightly while a straight edge has two. Advancing a fixed number of *vertices* per
@@ -318,18 +321,33 @@ frame, subdividing long segments as it goes, which gives a steady hand-speed.
 artwork, which is one big black path with no `stroke` at all — has no outline to
 follow. Sketch mode draws its edge anyway, or there would be nothing to watch.
 
-`--duration` solves for the speed from the total distance, so a drawing takes the
-time you asked for whatever its size. It accounts for the fact that each sub-path
-ends in a partial frame and each fill costs a frame; on the sample (61 sub-paths)
-ignoring that overhead made a 2-second request take 3.1 seconds. There is a floor
-— one frame per sub-path — and asking for less says so rather than quietly
-running long:
+**The fill flows in; it does not appear.** Turtle fills a whole polygon in one
+operation, so a colour that simply switched on would undo the illusion the moment
+the outline finished. Instead the shape is clipped to a horizontal front that
+sweeps down it, and each strip is filled in turn (`geometry/banding.py`).
+
+![Streaming fill](docs/images/fill-flow.png)
+
+*The colour front partway down the face, and the finished drawing. The banded
+fill is pixel-identical to filling the shape in one go, verified against an
+independent rasteriser; only the timing differs.*
+
+Streaming is on by default for a sketch; `--no-fill-flow` reverts to a single
+snap fill. The strips overlap by half a pixel, because abutting opaque strips can
+otherwise leave a hairline seam where the backend antialiases their shared edge.
+
+`--duration` solves for the speed from the total distance the pencil and the fill
+front cover together, so a drawing takes the time you asked for whatever its size.
+It accounts for the fact that each outline and each fill band ends in a partial
+frame; on the sample ignoring that overhead made a 2-second request take 3.1
+seconds. There is a floor — one frame per outline and per fill — and asking for
+less says so rather than quietly running long:
 
 ```
 $ python main.py assets/sample.svg --sketch --duration 1
 WARNING  --duration 1s is shorter than this drawing can be sketched. It needs at
-         least 2.1s at 30 fps, because each of its 61 sub-paths costs a frame.
-         Raise --fps, or ask for longer.
+         least 2.4s at 30 fps, because each of its 72 outlines and fills costs a
+         frame. Raise --fps, or ask for longer.
 ```
 
 `--sketch` and `--animate` are different effects and do not combine: `--animate`
@@ -446,12 +464,12 @@ Install Ghostscript for route 1.
 ## Testing
 
 ```bash
-pytest                    # 534 tests, no display needed, ~4 s
+pytest                    # 568 tests, no display needed, ~4 s
 pytest -m display -s      # window smoke test (needs a screen)
 python scripts/smoke_render.py   # multi-window end-to-end checks
 ```
 
-Coverage is 88%. The pipeline is tested against the `Canvas` protocol rather than
+Coverage is 89%. The pipeline is tested against the `Canvas` protocol rather than
 a real window, so the default suite is fast and deterministic.
 
 Display tests are deselected by default and run with `-s`. This is not squeamishness:

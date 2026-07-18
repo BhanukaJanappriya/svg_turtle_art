@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Streaming fill** for sketch mode (`--fill-flow`, on by default). Instead of a
+  fill appearing all at once when its outline finishes, the colour sweeps across
+  the shape as a horizontal front. The shape is clipped to a growing band and
+  filled strip by strip (`geometry/banding.py`); the strips overlap by half a
+  pixel so no seam shows. The banded result is pixel-identical to a single fill,
+  verified against an independent nonzero-winding rasteriser. `--no-fill-flow`
+  restores the single snap fill.
+  - The `--duration` model now folds the fill front's sweep into the total
+    distance, so a streamed drawing still finishes on time.
+  - The progress bar counts the fill sweep as well as the pencil travel.
+
 - **Pencil sketch mode** (`--sketch`) — draws from a blank canvas, tracing every
   shape's outline with a pencil at a steady hand-speed and then painting it in.
   - Paces by *distance* rather than by vertices (`geometry/polyline.py`), so the
