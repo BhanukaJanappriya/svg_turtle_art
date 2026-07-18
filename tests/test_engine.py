@@ -260,6 +260,12 @@ class TestPencilSketch:
         _, stats = run(TWO_SHAPES, svg_file, sketch=True, duration=0.5, fps=100)
         assert stats.render_seconds == pytest.approx(0.5, abs=0.15)
 
+    def test_duration_is_honoured_with_streaming_fill(self, svg_file):
+        # Streaming adds the fill sweep to the work, and the duration model has
+        # to account for it or the drawing overruns.
+        _, stats = run(TWO_SHAPES, svg_file, sketch=True, duration=0.5, fps=100, fill_flow=True)
+        assert stats.render_seconds == pytest.approx(0.5, abs=0.15)
+
     def test_an_impossible_duration_warns_rather_than_running_long_silently(self, svg_file, caplog):
         import logging
 
@@ -300,6 +306,11 @@ class TestProgressReporting:
 
     def _render(self, markup, svg_file, **overrides):
         """Render with a counting reporter and return it with the shapes."""
+        counter, shapes, _ = self._render_with_config(markup, svg_file, **overrides)
+        return counter, shapes
+
+    def _render_with_config(self, markup, svg_file, **overrides):
+        """Render with a counting reporter, also returning the config used."""
         from svg_turtle_renderer.renderer.path_renderer import PathRenderer
 
         path = svg_file(markup)
@@ -310,7 +321,7 @@ class TestProgressReporting:
         shapes = engine.prepare(engine.parse(), (1000, 800))
         counter = CountingProgress()
         PathRenderer(RecordingCanvas(), config, engine.background, None, counter).render(shapes)
-        return counter, shapes
+        return counter, shapes, config
 
     def test_painting_reports_one_unit_per_shape(self, svg_file):
         counter, shapes = self._render(TWO_SHAPES, svg_file)
@@ -327,23 +338,28 @@ class TestProgressReporting:
         assert counter.total > 100, "progress was not reported as a distance"
 
     def test_sketch_progress_adds_up_to_exactly_the_declared_total(self, svg_file):
-        # The bar's total is the trace length; if the advances did not sum to it
-        # the bar would stop short of the end, or overshoot it.
-        counter, shapes = self._render(
+        # If the advances did not sum to the bar's declared total it would stop
+        # short of the end, or overshoot it.
+        from svg_turtle_renderer.renderer.path_renderer import sketch_distance
+
+        counter, shapes, config = self._render_with_config(
             self.SINGLE_PATH, svg_file, sketch=True, pencil_speed=20_000, fps=100
         )
-        expected = sum(shape.trace_length for shape in shapes)
-        assert counter.total == pytest.approx(expected)
+        assert counter.total == pytest.approx(sketch_distance(shapes, config))
 
     def test_it_adds_up_across_many_shapes_and_sub_paths(self, svg_file):
+        from svg_turtle_renderer.renderer.path_renderer import sketch_distance
+
         markup = (
             '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
             '<path d="M 0 0 H 40 V 40 H 0 Z M 50 0 H 90 V 40 H 50 Z" fill="red"/>'
             '<circle cx="50" cy="70" r="20" fill="blue"/>'
             '<polyline points="0,95 100,95" stroke="black"/></svg>'
         )
-        counter, shapes = self._render(markup, svg_file, sketch=True, pencil_speed=20_000, fps=100)
-        assert counter.total == pytest.approx(sum(shape.trace_length for shape in shapes))
+        counter, shapes, config = self._render_with_config(
+            markup, svg_file, sketch=True, pencil_speed=20_000, fps=100
+        )
+        assert counter.total == pytest.approx(sketch_distance(shapes, config))
 
     def test_the_reporter_is_closed_even_when_rendering_is_interrupted(self, svg_file):
         # A bar left open corrupts the terminal for whatever prints next.
@@ -404,6 +420,101 @@ class TestTraceLength:
             style=Style(),
         )
         assert shape.trace_length == 10
+
+
+class TestStreamingFill:
+    """Fills stream in as a colour front rather than snapping on."""
+
+    BIG_FILL = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<rect x="0" y="0" width="100" height="100" fill="red"/></svg>'
+    )
+
+    @pytest.fixture(autouse=True)
+    def _no_real_sleep(self, monkeypatch):
+        """Strip the wait out of the sketch clock so these run in milliseconds.
+
+        The banding under test does not depend on wall-clock pacing, only on the
+        step, so removing the sleep keeps the assertions valid while letting the
+        tests use realistic frame rates cheaply.
+        """
+        monkeypatch.setattr("svg_turtle_renderer.renderer.animation.time.sleep", lambda _s: None)
+
+    def test_a_snap_fill_is_one_operation(self, svg_file):
+        canvas, _ = run(self.BIG_FILL, svg_file, sketch=True, pencil_speed=100_000, fill_flow=False)
+        assert len(canvas.fills) == 1
+
+    def test_a_streaming_fill_is_many_bands(self, svg_file):
+        # The whole point: the colour arrives in strips, not all at once.
+        canvas, _ = run(
+            self.BIG_FILL, svg_file, sketch=True, pencil_speed=1_500, fps=30, fill_flow=True
+        )
+        assert len(canvas.fills) > 1
+
+    def test_a_slower_pencil_makes_a_finer_fill(self, svg_file):
+        coarse, _ = run(self.BIG_FILL, svg_file, sketch=True, pencil_speed=6_000, fps=30)
+        fine, _ = run(self.BIG_FILL, svg_file, sketch=True, pencil_speed=1_000, fps=30)
+        assert len(fine.fills) > len(coarse.fills)
+
+    def test_streaming_is_the_default_for_a_sketch(self, svg_file):
+        canvas, _ = run(self.BIG_FILL, svg_file, sketch=True, pencil_speed=1_500, fps=30)
+        assert len(canvas.fills) > 1
+
+    def test_normal_rendering_never_bands(self, svg_file):
+        # Streaming is a sketch effect; a plain render fills in one operation
+        # even with fill_flow left on.
+        canvas, _ = run(self.BIG_FILL, svg_file, fill_flow=True)
+        assert len(canvas.fills) == 1
+
+    def test_the_bands_together_cover_the_whole_shape(self, svg_file):
+        # Every band is red and, unified, they must span the shape's height.
+        canvas, _ = run(
+            self.BIG_FILL, svg_file, sketch=True, pencil_speed=1_500, fps=30, fill_flow=True
+        )
+        ys = [p[1] for fill in canvas.fills for ring in fill.rings for p in ring]
+        span = max(ys) - min(ys)
+        # The shape fills the canvas minus margins; the band coverage should
+        # reach nearly that full height.
+        assert span > 700
+
+    def test_every_streamed_band_is_the_fill_colour(self, svg_file):
+        canvas, _ = run(
+            self.BIG_FILL, svg_file, sketch=True, pencil_speed=1_500, fps=30, fill_flow=True
+        )
+        assert {f.color.as_hex() for f in canvas.fills} == {"#ff0000"}
+
+    def test_streaming_does_not_change_the_finished_colours(self, svg_file):
+        snap, _ = run(TWO_SHAPES, svg_file, sketch=True, pencil_speed=100_000, fill_flow=False)
+        flow, _ = run(TWO_SHAPES, svg_file, sketch=True, pencil_speed=1_500, fps=30, fill_flow=True)
+        assert {f.color.as_hex() for f in snap.fills} == {f.color.as_hex() for f in flow.fills}
+
+    def test_streaming_fill_reports_progress_that_adds_up(self, svg_file):
+        counter, shapes = TestProgressReporting()._render(
+            self.BIG_FILL, svg_file, sketch=True, pencil_speed=1_500, fps=30, fill_flow=True
+        )
+        from svg_turtle_renderer.renderer.path_renderer import sketch_distance
+
+        config = RenderConfig(
+            input_path=svg_file(self.BIG_FILL),
+            sketch=True,
+            pencil_speed=1_500,
+            fps=30,
+            show_progress=False,
+            keep_open=False,
+        )
+        assert counter.total == pytest.approx(sketch_distance(shapes, config))
+
+    def test_the_progress_total_grows_when_fill_streams(self, svg_file):
+        # A streamed fill has more work to report than a snapped one, because the
+        # colour front now sweeps the shape's height.
+        from svg_turtle_renderer.renderer.path_renderer import sketch_distance
+
+        path = svg_file(self.BIG_FILL)
+        streamed = RenderConfig(input_path=path, sketch=True, fill_flow=True, keep_open=False)
+        snapped = RenderConfig(input_path=path, sketch=True, fill_flow=False, keep_open=False)
+        engine = RenderEngine(streamed)
+        shapes = engine.prepare(engine.parse(), (1000, 800))
+        assert sketch_distance(shapes, streamed) > sketch_distance(shapes, snapped)
 
 
 class TestTransparency:

@@ -26,7 +26,7 @@ from svg_turtle_renderer.parser.color_parser import WHITE, Color, parse_color
 from svg_turtle_renderer.parser.svg_parser import SVGParser
 from svg_turtle_renderer.renderer.animation import Clock, FrameClock, SketchClock
 from svg_turtle_renderer.renderer.canvas import Canvas
-from svg_turtle_renderer.renderer.path_renderer import PathRenderer
+from svg_turtle_renderer.renderer.path_renderer import PathRenderer, sketch_distance
 from svg_turtle_renderer.renderer.turtle_renderer import TurtleCanvas
 from svg_turtle_renderer.utils.helpers import douglas_peucker, format_duration
 from svg_turtle_renderer.utils.logger import get_logger
@@ -388,7 +388,7 @@ class RenderEngine:
         if self._config.sketch:
             return make_progress(
                 enabled=self._config.show_progress,
-                total=sum(shape.trace_length for shape in shapes),
+                total=sketch_distance(shapes, self._config),
                 description="Sketching",
                 unit="px",
                 unit_scale=True,

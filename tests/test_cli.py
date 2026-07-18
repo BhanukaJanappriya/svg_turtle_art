@@ -135,6 +135,40 @@ class TestDrawingFlags:
         assert config_for("--no-keep-open").keep_open is False
 
 
+class TestPencilFlags:
+    def test_sketch(self):
+        assert config_for("--sketch").sketch is True
+
+    def test_pencil_speed(self):
+        assert config_for("--pencil-speed", "1500").pencil_speed == 1500
+
+    def test_duration(self):
+        assert config_for("--duration", "30").duration == 30
+
+    def test_pencil_color(self):
+        assert config_for("--pencil-color", "#555").pencil_color == "#555"
+
+    def test_pencil_width(self):
+        assert config_for("--pencil-width", "2.5").pencil_width == 2.5
+
+    def test_show_pencil_can_be_negated(self):
+        assert config_for("--no-show-pencil").show_pencil is False
+
+    def test_fill_flow_is_on_by_default(self):
+        assert config_for("--sketch").fill_flow is True
+
+    def test_fill_flow_can_be_negated(self):
+        assert config_for("--sketch", "--no-fill-flow").fill_flow is False
+
+    def test_a_non_positive_pencil_speed_is_refused(self):
+        with pytest.raises(SystemExit):
+            config_for("--pencil-speed", "0")
+
+    def test_a_non_positive_duration_is_refused(self):
+        with pytest.raises(SystemExit):
+            config_for("--duration", "-5")
+
+
 class TestOutputFlags:
     def test_export_maps_to_the_output_path(self):
         assert config_for("--export", "out.png").output_path == "out.png"

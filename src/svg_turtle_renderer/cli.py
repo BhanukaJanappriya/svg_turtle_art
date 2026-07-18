@@ -220,6 +220,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="show a pencil cursor following the line (default on)",
     )
+    pencil.add_argument(
+        "--fill-flow",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="stream each fill in as a colour front instead of applying it at once (default on)",
+    )
     drawing.add_argument(
         "--hide-turtle",
         action=argparse.BooleanOptionalAction,

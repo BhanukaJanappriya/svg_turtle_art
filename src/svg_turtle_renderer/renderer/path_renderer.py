@@ -13,6 +13,9 @@ from collections.abc import Sequence
 
 from svg_turtle_renderer.core.config import RenderConfig
 from svg_turtle_renderer.core.model import Shape
+from svg_turtle_renderer.geometry.banding import group_bounds, horizontal_bands
+from svg_turtle_renderer.geometry.clipping import clip_polygon
+from svg_turtle_renderer.geometry.coordinate_system import Point
 from svg_turtle_renderer.geometry.fill_rule import group_rings
 from svg_turtle_renderer.geometry.polyline import chunks_by_length, polyline_length
 from svg_turtle_renderer.parser.color_parser import BLACK, Color, hsl_to_rgb, parse_color
@@ -26,6 +29,26 @@ logger = get_logger(__name__)
 # Below this width a stroke is invisible on screen anyway, and turtle would
 # still round it up to one pixel, so it is worth culling early.
 _MIN_STROKE_WIDTH = 0.05
+
+
+def sketch_distance(shapes: Sequence[Shape], config: RenderConfig) -> float:
+    """Return the total pixel distance a sketch of ``shapes`` covers.
+
+    This is the length of every outline the pencil traces plus, when the fill
+    streams in, the height each shape's colour front sweeps. The engine sizes the
+    progress bar with it and the renderer paces the pencil with it, so the two
+    must derive it the same way; hence one function.
+    """
+    total = 0.0
+    for shape in shapes:
+        total += shape.trace_length
+        if config.fill_flow and config.fill and shape.style.fill is not None:
+            rings = [sp.points for sp in shape.subpaths if len(sp.points) >= 3]
+            for group in group_rings(rings, even_odd=shape.style.even_odd):
+                box = group_bounds(group)
+                if box is not None:
+                    total += box.height
+    return total
 
 
 class PathRenderer:
@@ -109,48 +132,47 @@ class PathRenderer:
     # ------------------------------------------------------------------
 
     def _sketch_step(self, shapes: Sequence[Shape]) -> float:
-        """Return how far the pencil advances per frame, in pixels.
+        """Return how far the pencil and fill front advance per frame, in pixels.
 
         Without ``--duration`` the configured speed is used directly. With it, the
-        step is solved from the distance the pencil must cover -- but distance
-        alone under-predicts the time, because every sub-path ends in a partial
-        chunk (half a frame wasted, on average) and every fill costs a frame of
-        its own. A drawing of many small sub-paths is dominated by that overhead:
-        ignoring it made a two-second request take three.
+        step is solved from the distance that has to be covered so the drawing
+        takes the time asked for. That distance is the length of every outline the
+        pencil traces plus, when the fill streams in, the height each shape's
+        colour front has to sweep.
+
+        Distance alone under-predicts the time, because each outline and each fill
+        band ends in a partial frame worth about half a frame, and each must run
+        for at least one frame. Those counts are added back; ignoring them once
+        made a two-second request take three.
         """
         fps = max(self._config.fps, 1)
         if self._config.duration is None:
             return max(self._config.pencil_speed / fps, 0.01)
 
-        total = 0.0
-        subpaths = 0
-        fills = 0
+        total = sketch_distance(shapes, self._config)
+        segments = 0  # things that each end in a partial frame and cost >= 1
         for shape in shapes:
-            for subpath in shape.subpaths:
-                if subpath.is_drawable:
-                    total += subpath.trace_length
-                    subpaths += 1
+            segments += sum(1 for sp in shape.subpaths if sp.is_drawable)
             if shape.style.fill is not None and self._config.fill:
-                fills += 1
+                segments += len(self._fill_groups(shape))
 
         if total <= 0.0:
             return 1.0
 
         budget = self._config.duration * fps
-        overhead = 0.5 * subpaths + fills
+        overhead = 0.5 * segments
 
-        # Each sub-path costs at least one frame however fast the pencil moves,
-        # and each fill one more, so this is the floor no step size can beat.
-        minimum_frames = subpaths + fills
-        if budget < minimum_frames:
+        # Every segment runs for at least one frame however fast things move, so
+        # this is the floor no step size can beat.
+        if budget < segments:
             logger.warning(
                 "--duration %.3gs is shorter than this drawing can be sketched. "
                 "It needs at least %.1fs at %d fps, because each of its %d "
-                "sub-paths costs a frame. Raise --fps, or ask for longer.",
+                "outlines and fills costs a frame. Raise --fps, or ask for longer.",
                 self._config.duration,
-                minimum_frames / fps,
+                segments / fps,
                 fps,
-                subpaths,
+                segments,
             )
             return total
 
@@ -196,13 +218,9 @@ class PathRenderer:
 
         # Paint the shape properly once its outline exists, so the sketch fills
         # in behind the pencil line rather than replacing it.
-        if fill_color is not None:
-            rings = [sp.points for sp in shape.subpaths if len(sp.points) >= 3]
-            for group in group_rings(rings, even_odd=shape.style.even_odd):
-                self._canvas.fill_polygons(group, fill_color)
-                drew = True
-            if self._clock is not None:
-                self._clock.tick()
+        if fill_color is not None and self._fill_groups(shape):
+            self._fill_shape(shape, fill_color)
+            drew = True
 
         if stroke_color is not None:
             for subpath in shape.subpaths:
@@ -212,6 +230,43 @@ class PathRenderer:
                     )
                     drew = True
         return drew
+
+    def _fill_groups(self, shape: Shape) -> list[list[list[Point]]]:
+        """Return the shape's rings grouped for even-odd filling."""
+        rings = [sp.points for sp in shape.subpaths if len(sp.points) >= 3]
+        return group_rings(rings, even_odd=shape.style.even_odd)
+
+    def _fill_shape(self, shape: Shape, fill_color: Color) -> None:
+        """Fill a shape, streaming the colour in when ``fill_flow`` is set.
+
+        Without flow each group is filled in one operation, as normal rendering
+        does. With flow each group is filled as a stack of horizontal bands so the
+        colour sweeps across the shape instead of appearing at once. Whether the
+        clock is present only decides whether the sweep is paced in real time; the
+        banding, and the progress it reports, depend on ``fill_flow`` alone so
+        that the work reported always matches the work sized up front.
+        """
+        groups = self._fill_groups(shape)
+        if not self._config.fill_flow:
+            for group in groups:
+                self._canvas.fill_polygons(group, fill_color)
+            return
+
+        for group in groups:
+            box = group_bounds(group)
+            if box is None:
+                continue
+            for band in horizontal_bands(box, self._step):
+                clipped = [clip_polygon(ring, band.box) for ring in group]
+                clipped = [ring for ring in clipped if len(ring) >= 3]
+                if clipped:
+                    self._canvas.fill_polygons(clipped, fill_color)
+                # The fill front travels the shape's height; reporting that
+                # distance keeps the progress bar honest, since a tall shape now
+                # takes many frames to colour rather than one.
+                self._progress.advance(band.advance)
+                if self._clock is not None:
+                    self._clock.tick()
 
     def _pencil_color(
         self, shape: Shape, fill_color: Color | None, stroke_color: Color | None

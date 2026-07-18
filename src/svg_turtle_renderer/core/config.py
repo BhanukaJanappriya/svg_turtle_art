@@ -67,6 +67,8 @@ class RenderConfig:
             shape in its own ink.
         pencil_width: The pencil line's width in pixels.
         show_pencil: Show a pencil cursor following the line while sketching.
+        fill_flow: Stream each fill in as a colour front sweeping across the
+            shape, rather than applying it all at once. Only affects a sketch.
         resolution: Curve quality multiplier; higher is smoother and slower.
         simplify: Douglas-Peucker tolerance in pixels; 0 disables simplification.
         optimize_order: Reorder shapes to shorten pen travel.
@@ -114,6 +116,7 @@ class RenderConfig:
     pencil_color: str | None = None
     pencil_width: float = 1.0
     show_pencil: bool = True
+    fill_flow: bool = True
 
     resolution: float = 1.0
     simplify: float = 0.0
