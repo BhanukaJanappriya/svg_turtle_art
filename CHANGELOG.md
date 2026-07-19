@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Brush sketch tool** (`--brush`, or `--sketch-tool brush`). The brush traces
+  outlines in thick coloured strokes and paints the fill in visible horizontal
+  courses rather than clipped bands. Each row is a wide stroke drawn only across
+  the parts of that scanline inside the shape (`geometry/scanline.py`), so holes
+  stay open and the rows, spaced closer than the brush is wide, leave no stripes.
+  `--brush-width` sets the stroke width. A brush cursor follows the paint.
+  - The duration model and progress bar are shared with the pencil, so a brush
+    drawing still finishes on time and reports its progress by distance.
+
 - **Streaming fill** for sketch mode (`--fill-flow`, on by default). Instead of a
   fill appearing all at once when its outline finishes, the colour sweeps across
   the shape as a horizontal front. The shape is clipped to a growing band and

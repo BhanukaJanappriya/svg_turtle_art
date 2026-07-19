@@ -65,9 +65,10 @@ something an even-odd backend can actually draw.
   onto the page colour, since turtle has no alpha.
 - **`<use>`, `<defs>`, `<symbol>`** — including `xlink:href`, per-instance styling,
   and cycle detection.
-- **Pencil sketch mode** — watch a pencil trace the artwork from a blank canvas at
-  a steady hand-speed, with the colour then streaming in behind it rather than
-  snapping on.
+- **Pencil and brush sketch modes** — watch a pencil trace the artwork from a
+  blank canvas at a steady hand-speed with the colour streaming in behind it, or
+  switch to a brush that lays down thick strokes and paints the fill in visible
+  courses.
 - **Auto-fit** — aspect-preserving scale-to-canvas, centring, margins, rotation,
   mirror and flip.
 - **Themes and colour modes** — original, monochrome, random; five presets.
@@ -122,8 +123,11 @@ python main.py artwork.svg
 # Watch a pencil draw it from a blank canvas
 python main.py artwork.svg --sketch
 
-# Sketch in graphite, taking exactly 45 seconds however big the drawing is
-python main.py artwork.svg --sketch --duration 45 --pencil-color '#555'
+# Paint it with a brush instead, taking exactly 45 seconds however big it is
+python main.py artwork.svg --brush --duration 45
+
+# Sketch in graphite
+python main.py artwork.svg --sketch --pencil-color '#555'
 
 # Watch it draw, on a dark background, and save the result
 python main.py artwork.svg --animate --fps 60 --theme dark --export out.png
@@ -190,13 +194,16 @@ print(len(canvas.fills), "fills,", len(canvas.strokes), "strokes")
 | `--fps N` | `30` | Frames per second while animating |
 | `--hide-turtle` / `--no-hide-turtle` | on | Hide the cursor when finished |
 | `--keep-open` / `--no-keep-open` | on | Wait for a click before closing |
-| **Pencil sketch** | | |
-| `--sketch` | off | Trace each outline with a pencil, from a blank canvas |
-| `--pencil-speed PX` | `900` | Pencil speed, in pixels per second |
+| **Sketch** | | |
+| `--sketch` | off | Draw from a blank canvas, tracing each outline first |
+| `--brush` | off | Sketch with a brush: thick strokes and brush-row fills |
+| `--sketch-tool pencil\|brush` | `pencil` | The drawing tool |
+| `--pencil-speed PX` | `900` | Tool speed, in pixels per second |
 | `--duration SEC` | — | Finish in this long, whatever the drawing's size |
 | `--pencil-color COLOR` | — | Pencil colour; default traces each shape's own ink |
 | `--pencil-width PX` | `1` | Pencil line width |
-| `--show-pencil` / `--no-show-pencil` | on | Show the pencil cursor |
+| `--brush-width PX` | `9` | Brush stroke width |
+| `--show-pencil` / `--no-show-pencil` | on | Show the drawing cursor |
 | `--fill-flow` / `--no-fill-flow` | on | Stream fills in instead of applying at once |
 | **Quality** | | |
 | `--resolution N` | `1.0` | Curve smoothness; higher is smoother, slower |
@@ -249,7 +256,7 @@ nothing below the parser knows what XML is.
   │ path_parser   │ bezier             │ turtle_renderer │
   │ color_parser  │ scaler   polyline  │ path_renderer   │
   │ transform_... │ clipping banding   │ animation       │
-  │               │ fill_rule          │                 │
+  │               │ fill_rule scanline │                 │
   └───────────────┴────────────────────┴─────────────────┘
                            │
                            ▼
@@ -258,7 +265,7 @@ nothing below the parser knows what XML is.
 
 The seam that matters is `renderer/canvas.py`. `PathRenderer` draws against a
 `Canvas` **protocol**, never against turtle directly, so the entire pipeline runs
-headless against a `RecordingCanvas`. That is why 567 of the 568 tests need no
+headless against a `RecordingCanvas`. That is why 596 of the 597 tests need no
 display.
 
 ## The rendering pipeline
@@ -335,6 +342,19 @@ independent rasteriser; only the timing differs.*
 Streaming is on by default for a sketch; `--no-fill-flow` reverts to a single
 snap fill. The strips overlap by half a pixel, because abutting opaque strips can
 otherwise leave a hairline seam where the backend antialiases their shared edge.
+
+**The brush is a different tool, not just a thicker pencil.** `--brush` traces the
+outline in thick coloured strokes and then paints the fill in visible horizontal
+courses rather than clipped bands: each row is a wide stroke drawn only across the
+parts of that scanline inside the shape (`geometry/scanline.py`), so holes stay
+open and the paint goes on the way a brush lays it down.
+
+![Brush painting](docs/images/brush.png)
+
+*The brush mid-course, the paint sweeping down over the traced outline, and the
+finished piece. Unlike the banded pencil fill this is not pixel-identical to a
+plain fill — the strokes are meant to read as brushwork — but it covers the shape
+completely, the rows spaced closer than the brush is wide so none show through.*
 
 `--duration` solves for the speed from the total distance the pencil and the fill
 front cover together, so a drawing takes the time you asked for whatever its size.
@@ -464,7 +484,7 @@ Install Ghostscript for route 1.
 ## Testing
 
 ```bash
-pytest                    # 568 tests, no display needed, ~4 s
+pytest                    # 597 tests, no display needed, ~4 s
 pytest -m display -s      # window smoke test (needs a screen)
 python scripts/smoke_render.py   # multi-window end-to-end checks
 ```
