@@ -50,12 +50,16 @@ class Canvas(Protocol):
         """Mark a point where a partially drawn image may be presented."""
         ...
 
-    def show_cursor(self, visible: bool) -> None:
+    def show_cursor(self, visible: bool, kind: str = "pencil") -> None:
         """Show or hide the drawing cursor at the pen's position.
 
         Only meaningful while a drawing is being watched: the cursor is what
-        makes the pencil sketch effect look like a hand rather than an image
-        appearing.
+        makes the sketch look like a hand rather than an image appearing.
+
+        Args:
+            visible: Whether the cursor is shown.
+            kind: Which cursor to show, ``"pencil"`` or ``"brush"``.
+
         """
         ...
 
@@ -90,6 +94,7 @@ class RecordingCanvas:
     strokes: list[StrokeRecord] = field(default_factory=list)
     frames: int = 0
     cursor_visible: bool = False
+    cursor_kind: str = "pencil"
 
     def fill_polygons(self, rings: Sequence[Sequence[Point]], color: Color) -> None:
         """Record a fill."""
@@ -105,6 +110,7 @@ class RecordingCanvas:
         """Record a frame boundary."""
         self.frames += 1
 
-    def show_cursor(self, visible: bool) -> None:
-        """Record the cursor's visibility."""
+    def show_cursor(self, visible: bool, kind: str = "pencil") -> None:
+        """Record the cursor's visibility and kind."""
         self.cursor_visible = visible
+        self.cursor_kind = kind

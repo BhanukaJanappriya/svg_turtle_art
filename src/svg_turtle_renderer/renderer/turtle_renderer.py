@@ -37,6 +37,30 @@ _PENCIL_SHAPE = (
 )
 _PENCIL_SHAPE_NAME = "svg_turtle_pencil"
 
+# A round paintbrush, likewise tip-first: soft bristles at the point, a metal
+# ferrule, then the handle. Wider than the pencil so it reads as a brush.
+_BRUSH_SHAPE = (
+    (0.0, 0.0),  # bristle tip, on the pen position
+    (-5.0, -7.0),
+    (-6.0, -14.0),  # spread of the bristles
+    (-4.0, -18.0),
+    (-4.5, -30.0),  # ferrule
+    (-3.0, -46.0),  # handle
+    (3.0, -46.0),
+    (4.5, -30.0),
+    (4.0, -18.0),
+    (6.0, -14.0),
+    (5.0, -7.0),
+)
+_BRUSH_SHAPE_NAME = "svg_turtle_brush"
+
+# Registry of cursor kinds: outline shape, its registered name, and the two
+# colours (line, fill) it is drawn in.
+_CURSORS = {
+    "pencil": (_PENCIL_SHAPE, _PENCIL_SHAPE_NAME, ("#2b2b2b", "#e8b552")),
+    "brush": (_BRUSH_SHAPE, _BRUSH_SHAPE_NAME, ("#5a3b1a", "#b5651d")),
+}
+
 
 class TurtleCanvas:
     """A drawing surface backed by Python's turtle graphics.
@@ -265,7 +289,7 @@ class TurtleCanvas:
             pass
 
     def _aim_cursor(self, points: Sequence[Point]) -> None:
-        """Move the pencil cursor to the pen tip and point it along the stroke."""
+        """Move the cursor to the pen tip and point it along the stroke."""
         if self._cursor is None:
             return
         tail, head = points[-2], points[-1]
@@ -276,13 +300,13 @@ class TurtleCanvas:
             # gives the heading directly.
             self._cursor.setheading(math.degrees(math.atan2(dy, dx)))
 
-    def show_cursor(self, visible: bool) -> None:
-        """Show or hide a pencil cursor that follows the pen.
+    def show_cursor(self, visible: bool, kind: str = "pencil") -> None:
+        """Show or hide a pencil or brush cursor that follows the pen.
 
         The cursor gets a turtle of its own rather than reusing the drawing pen.
         A turtle's shape is painted in its *own* pen and fill colours, so sharing
-        would repaint the pencil with every shape's ink; a separate turtle stays
-        graphite, and it can be moved without touching the drawing.
+        would repaint the cursor with every shape's ink; a separate turtle keeps
+        its own look, and it can be moved without touching the drawing.
         """
         if self._turtle is None or self._screen is None:
             return
@@ -293,22 +317,23 @@ class TurtleCanvas:
                 self._cursor.hideturtle()
             return
 
-        if self._cursor is None:
-            try:
-                import turtle
+        shape, name, colours = _CURSORS.get(kind, _CURSORS["pencil"])
+        try:
+            import turtle
 
-                if _PENCIL_SHAPE_NAME not in self._screen.getshapes():
-                    self._screen.register_shape(_PENCIL_SHAPE_NAME, _PENCIL_SHAPE)
+            if self._cursor is None:
                 self._cursor = turtle.Turtle(visible=False)
                 self._cursor.penup()  # it must never draw
                 self._cursor.speed(0)
-                self._cursor.shape(_PENCIL_SHAPE_NAME)
-                self._cursor.color("#2b2b2b", "#e8b552")  # graphite tip, wood barrel
-            except Exception as exc:  # pragma: no cover - a cosmetic failure only
-                logger.debug("Could not install the pencil cursor: %s", exc)
-                self._cursor = None
-                self._cursor_visible = False
-                return
+            if name not in self._screen.getshapes():
+                self._screen.register_shape(name, shape)
+            self._cursor.shape(name)
+            self._cursor.color(*colours)
+        except Exception as exc:  # pragma: no cover - a cosmetic failure only
+            logger.debug("Could not install the %s cursor: %s", kind, exc)
+            self._cursor = None
+            self._cursor_visible = False
+            return
 
         self._cursor.showturtle()
 

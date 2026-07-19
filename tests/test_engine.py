@@ -266,6 +266,14 @@ class TestPencilSketch:
         _, stats = run(TWO_SHAPES, svg_file, sketch=True, duration=0.5, fps=100, fill_flow=True)
         assert stats.render_seconds == pytest.approx(0.5, abs=0.15)
 
+    def test_duration_is_honoured_with_the_brush(self, svg_file):
+        # The brush fills in rows rather than bands, but the pacing is shared, so
+        # a brush drawing must land on its duration too.
+        _, stats = run(
+            TWO_SHAPES, svg_file, sketch=True, sketch_tool="brush", duration=0.5, fps=100
+        )
+        assert stats.render_seconds == pytest.approx(0.5, abs=0.15)
+
     def test_an_impossible_duration_warns_rather_than_running_long_silently(self, svg_file, caplog):
         import logging
 
@@ -515,6 +523,106 @@ class TestStreamingFill:
         engine = RenderEngine(streamed)
         shapes = engine.prepare(engine.parse(), (1000, 800))
         assert sketch_distance(shapes, streamed) > sketch_distance(shapes, snapped)
+
+
+class TestBrush:
+    """Brush mode traces thick coloured strokes and fills in brush rows."""
+
+    BIG_FILL = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+        '<rect x="0" y="0" width="100" height="100" fill="red"/></svg>'
+    )
+
+    @pytest.fixture(autouse=True)
+    def _no_real_sleep(self, monkeypatch):
+        monkeypatch.setattr("svg_turtle_renderer.renderer.animation.time.sleep", lambda _s: None)
+
+    def test_the_brush_traces_thicker_than_the_pencil(self, svg_file):
+        pencil, _ = run(self.BIG_FILL, svg_file, sketch=True, sketch_tool="pencil", fill=False)
+        brush, _ = run(self.BIG_FILL, svg_file, sketch=True, sketch_tool="brush", fill=False)
+        assert brush.strokes[0].width > pencil.strokes[0].width
+
+    def test_the_brush_traces_in_the_shapes_ink(self, svg_file):
+        canvas, _ = run(self.BIG_FILL, svg_file, sketch=True, sketch_tool="brush", pencil_speed=1e6)
+        assert canvas.strokes[0].color.as_hex() == "#ff0000"
+
+    def test_the_brush_fills_with_strokes_not_polygons(self, svg_file):
+        # A brush lays paint in courses; there should be no polygon fill at all.
+        canvas, _ = run(
+            self.BIG_FILL, svg_file, sketch=True, sketch_tool="brush", pencil_speed=1_500, fps=30
+        )
+        assert canvas.fills == []
+        assert len(canvas.strokes) > 1
+
+    def test_the_pencil_still_fills_with_polygons(self, svg_file):
+        canvas, _ = run(
+            self.BIG_FILL, svg_file, sketch=True, sketch_tool="pencil", pencil_speed=1_500, fps=30
+        )
+        assert canvas.fills
+
+    def test_the_brush_rows_span_the_shape_width(self, svg_file):
+        # Every brush row runs the full width of the square it is painting.
+        canvas, _ = run(
+            self.BIG_FILL, svg_file, sketch=True, sketch_tool="brush", pencil_speed=1_500, fps=30
+        )
+        fill_rows = [
+            s for s in canvas.strokes if len(s.points) == 2 and s.points[0][1] == s.points[1][1]
+        ]
+        assert fill_rows
+        widest = max(abs(s.points[1][0] - s.points[0][0]) for s in fill_rows)
+        assert widest > 700  # the square nearly fills the 1000px canvas
+
+    def test_the_brush_rows_leave_no_vertical_gaps(self, svg_file):
+        # Rows must be spaced no further apart than the brush is wide, or the fill
+        # would show stripes. Fill rows run the full width of the square; the
+        # short outline-trace segments are filtered out by that width.
+        canvas, _ = run(
+            self.BIG_FILL,
+            svg_file,
+            sketch=True,
+            sketch_tool="brush",
+            brush_width=9,
+            pencil_speed=1_500,
+            fps=30,
+        )
+        fill_rows = [
+            s
+            for s in canvas.strokes
+            if len(s.points) == 2
+            and s.points[0][1] == s.points[1][1]
+            and abs(s.points[1][0] - s.points[0][0]) > 500
+        ]
+        rows = sorted({round(s.points[0][1], 3) for s in fill_rows})
+        gaps = [b - a for a, b in zip(rows, rows[1:], strict=False)]
+        assert gaps
+        assert max(gaps) <= 9  # never wider than the brush
+
+    def test_the_brush_cursor_is_selected(self, svg_file):
+        canvas, _ = run(self.BIG_FILL, svg_file, sketch=True, sketch_tool="brush", pencil_speed=1e6)
+        assert canvas.cursor_kind == "brush"
+
+    def test_brush_progress_adds_up(self, svg_file):
+        from svg_turtle_renderer.renderer.path_renderer import sketch_distance
+
+        counter, shapes, config = TestProgressReporting()._render_with_config(
+            self.BIG_FILL, svg_file, sketch=True, sketch_tool="brush", pencil_speed=1_500, fps=30
+        )
+        assert counter.total == pytest.approx(sketch_distance(shapes, config))
+
+    def test_a_donut_keeps_its_hole_under_the_brush(self, svg_file):
+        # The brush must not paint across a hole.
+        markup = (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
+            '<path fill="red" d="M 10 10 H 90 V 90 H 10 Z M 35 65 H 65 V 35 H 35 Z"/></svg>'
+        )
+        canvas, _ = run(
+            markup, svg_file, sketch=True, sketch_tool="brush", pencil_speed=1_500, fps=30
+        )
+        # Somewhere in the hole's vertical range a row must be split into two.
+        split_rows = [s for s in canvas.strokes if len(s.points) == 2]
+        heights = {round(s.points[0][1]) for s in split_rows}
+        rows_by_height = {h: [s for s in split_rows if round(s.points[0][1]) == h] for h in heights}
+        assert any(len(v) >= 2 for v in rows_by_height.values())
 
 
 class TestTransparency:

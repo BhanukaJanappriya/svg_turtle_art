@@ -17,6 +17,7 @@ from svg_turtle_renderer.core.exceptions import ConfigError
 
 ColorMode = Literal["original", "mono", "random"]
 FitMode = Literal["viewbox", "content"]
+SketchTool = Literal["pencil", "brush"]
 
 #: Named themes, applied before any explicit flag so the flag still wins.
 THEMES: dict[str, dict[str, Any]] = {
@@ -58,15 +59,19 @@ class RenderConfig:
             is set, since the two pace the screen differently.
         animate: Draw progressively, presenting frames at ``fps``.
         fps: Target screen updates per second while animating or sketching.
-        sketch: Trace every shape's outline with a pencil before painting it,
-            at a steady hand-speed, from a blank canvas.
-        pencil_speed: How fast the pencil travels, in pixels per second.
+        sketch: Trace every shape's outline before painting it, at a steady
+            hand-speed, from a blank canvas.
+        sketch_tool: The drawing tool. ``pencil`` traces a thin graphite line and
+            fills with a hard colour front; ``brush`` traces a thick coloured
+            stroke and fills in visible brush rows.
+        pencil_speed: How fast the tool travels, in pixels per second.
         duration: Sketch for this many seconds, overriding ``pencil_speed``, so a
             drawing takes the same time whatever its size.
         pencil_color: The colour the pencil traces with. ``None`` traces each
             shape in its own ink.
         pencil_width: The pencil line's width in pixels.
-        show_pencil: Show a pencil cursor following the line while sketching.
+        brush_width: The brush stroke's width in pixels.
+        show_pencil: Show the drawing cursor following the line while sketching.
         fill_flow: Stream each fill in as a colour front sweeping across the
             shape, rather than applying it all at once. Only affects a sketch.
         resolution: Curve quality multiplier; higher is smoother and slower.
@@ -111,10 +116,12 @@ class RenderConfig:
     fps: int = 30
 
     sketch: bool = False
+    sketch_tool: SketchTool = "pencil"
     pencil_speed: float = 900.0
     duration: float | None = None
     pencil_color: str | None = None
     pencil_width: float = 1.0
+    brush_width: float = 9.0
     show_pencil: bool = True
     fill_flow: bool = True
 
@@ -180,6 +187,12 @@ class RenderConfig:
             raise ConfigError(f"--duration must be positive, got {self.duration}")
         if self.pencil_width <= 0.0:
             raise ConfigError(f"--pencil-width must be positive, got {self.pencil_width}")
+        if self.brush_width <= 0.0:
+            raise ConfigError(f"--brush-width must be positive, got {self.brush_width}")
+        if self.sketch_tool not in ("pencil", "brush"):
+            raise ConfigError(
+                f"--sketch-tool must be 'pencil' or 'brush', got {self.sketch_tool!r}"
+            )
         if self.resolution <= 0.0:
             raise ConfigError(f"--resolution must be positive, got {self.resolution}")
         if self.simplify < 0.0:
@@ -195,6 +208,11 @@ class RenderConfig:
                 "Nothing would be drawn: --no-fill and --no-stroke are both set. "
                 "Pass --wireframe to draw outlines only."
             )
+
+    @property
+    def stroke_width(self) -> float:
+        """Return the width the active sketch tool traces and paints with."""
+        return self.brush_width if self.sketch_tool == "brush" else self.pencil_width
 
     @property
     def turtle_speed(self) -> int:

@@ -8,6 +8,7 @@ never touches turtle and can be exercised headless.
 
 from __future__ import annotations
 
+import math
 import random
 from collections.abc import Sequence
 
@@ -18,6 +19,7 @@ from svg_turtle_renderer.geometry.clipping import clip_polygon
 from svg_turtle_renderer.geometry.coordinate_system import Point
 from svg_turtle_renderer.geometry.fill_rule import group_rings
 from svg_turtle_renderer.geometry.polyline import chunks_by_length, polyline_length
+from svg_turtle_renderer.geometry.scanline import horizontal_spans
 from svg_turtle_renderer.parser.color_parser import BLACK, Color, hsl_to_rgb, parse_color
 from svg_turtle_renderer.renderer.animation import Clock
 from svg_turtle_renderer.renderer.canvas import Canvas
@@ -29,6 +31,10 @@ logger = get_logger(__name__)
 # Below this width a stroke is invisible on screen anyway, and turtle would
 # still round it up to one pixel, so it is worth culling early.
 _MIN_STROKE_WIDTH = 0.05
+
+# Brush rows are spaced this fraction of the brush width apart, so neighbouring
+# courses overlap and leave no gaps between them.
+_BRUSH_ROW_RATIO = 0.8
 
 
 def sketch_distance(shapes: Sequence[Shape], config: RenderConfig) -> float:
@@ -103,7 +109,7 @@ class PathRenderer:
         sketching = self._config.sketch
         if sketching:
             self._step = self._sketch_step(shapes)
-            self._canvas.show_cursor(self._config.show_pencil)
+            self._canvas.show_cursor(self._config.show_pencil, self._config.sketch_tool)
 
         if self._clock is not None:
             self._clock.start()
@@ -122,7 +128,7 @@ class PathRenderer:
                     self._clock.tick()
 
         if sketching:
-            self._canvas.show_cursor(False)
+            self._canvas.show_cursor(False, self._config.sketch_tool)
         if self._clock is not None:
             self._clock.final()
         return painted
@@ -200,6 +206,7 @@ class PathRenderer:
         """
         fill_color, stroke_color, stroke_width = self._resolve(shape)
         pencil = self._pencil_color(shape, fill_color, stroke_color)
+        trace_width = self._config.stroke_width
         drew = False
 
         for subpath in shape.subpaths:
@@ -207,7 +214,7 @@ class PathRenderer:
             if len(points) < 2:
                 continue
             for chunk in chunks_by_length(points, self._step):
-                self._canvas.stroke_polyline(chunk, pencil, self._config.pencil_width, False)
+                self._canvas.stroke_polyline(chunk, pencil, trace_width, False)
                 # Progress is the distance actually drawn, which is what the
                 # viewer is watching. Counting shapes would leave the bar at 0%
                 # for the whole sketch of a single-path drawing.
@@ -217,7 +224,7 @@ class PathRenderer:
             drew = True
 
         # Paint the shape properly once its outline exists, so the sketch fills
-        # in behind the pencil line rather than replacing it.
+        # in behind the drawn line rather than replacing it.
         if fill_color is not None and self._fill_groups(shape):
             self._fill_shape(shape, fill_color)
             drew = True
@@ -252,6 +259,10 @@ class PathRenderer:
                 self._canvas.fill_polygons(group, fill_color)
             return
 
+        if self._config.sketch_tool == "brush":
+            self._brush_fill(shape, fill_color)
+            return
+
         for group in groups:
             box = group_bounds(group)
             if box is None:
@@ -267,6 +278,52 @@ class PathRenderer:
                 self._progress.advance(band.advance)
                 if self._clock is not None:
                     self._clock.tick()
+
+    def _brush_fill(self, shape: Shape, fill_color: Color) -> None:
+        """Fill a shape with horizontal brush rows, top to bottom.
+
+        Where the banded fill lays down clipped polygons, a brush lays down
+        strokes: each row is a thick horizontal line drawn only across the parts
+        of that scanline inside the group, so the colour goes on in visible
+        courses like real brushwork.
+
+        The groups are the same even-odd-fillable groups the banded fill uses, so
+        holes come out right and the swept distance matches what was sized up
+        front. Rows are spaced a little closer than the brush is wide, so
+        neighbouring courses overlap and leave no gaps, and the front is advanced
+        by the common step so the paint arrives at the same pace as everything
+        else.
+        """
+        width = self._config.brush_width
+        row_gap = max(width * _BRUSH_ROW_RATIO, 0.5)
+        painted_since_tick = 0.0
+
+        for group in self._fill_groups(shape):
+            box = group_bounds(group)
+            if box is None:
+                continue
+            rows = max(1, math.ceil(box.height / row_gap))
+            # Advancing by an equal share each row makes the reported distance sum
+            # to the group height exactly, which is what the bar was told.
+            advance = box.height / rows
+
+            for i in range(rows):
+                # Paint from the top (high y in canvas space) down at an even
+                # gap. Because the gap is a fraction of the brush width, each
+                # stroke is wider than the gap and covers down to the next row,
+                # including the sliver past the last row to the bottom edge.
+                row = box.max_y - i * row_gap
+                # The group is arranged to be filled even-odd, so its spans use
+                # that rule regardless of the document's own fill rule.
+                for x0, x1 in horizontal_spans(group, row, even_odd=True):
+                    self._canvas.stroke_polyline([(x0, row), (x1, row)], fill_color, width, False)
+                self._progress.advance(advance)
+                painted_since_tick += advance
+                # Present a frame every `step` pixels of paint, so the front
+                # sweeps at the common speed however dense the rows are.
+                if painted_since_tick >= self._step and self._clock is not None:
+                    self._clock.tick()
+                    painted_since_tick = 0.0
 
     def _pencil_color(
         self, shape: Shape, fill_color: Color | None, stroke_color: Color | None

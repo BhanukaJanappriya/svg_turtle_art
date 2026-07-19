@@ -195,6 +195,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="draw from a blank canvas, tracing each outline with a pencil",
     )
     pencil.add_argument(
+        "--brush",
+        action="store_true",
+        default=None,
+        help="sketch with a paintbrush: thick coloured strokes and brush-row fills",
+    )
+    pencil.add_argument(
+        "--sketch-tool",
+        choices=("pencil", "brush"),
+        help="the drawing tool for a sketch (default pencil)",
+    )
+    pencil.add_argument(
+        "--brush-width",
+        type=_positive_float,
+        metavar="PX",
+        help="brush stroke width in pixels (default 9)",
+    )
+    pencil.add_argument(
         "--pencil-speed",
         type=_positive_float,
         metavar="PX",
@@ -326,6 +343,12 @@ def build_config(argv: Sequence[str] | None = None) -> RenderConfig:
     # automatically" -- but it must not be lost when a config file sets a scale.
     if "--scale" in (argv if argv is not None else sys.argv[1:]) and args.scale is None:
         overrides["scale"] = None
+
+    # --brush is a shorthand: it turns a sketch on and selects the brush tool,
+    # without the user having to type --sketch --sketch-tool brush.
+    if args.brush:
+        overrides["sketch"] = True
+        overrides.setdefault("sketch_tool", "brush")
 
     if args.config:
         return RenderConfig.from_file(args.config, **overrides)

@@ -160,6 +160,28 @@ class TestPencilFlags:
     def test_fill_flow_can_be_negated(self):
         assert config_for("--sketch", "--no-fill-flow").fill_flow is False
 
+    def test_brush_enables_sketch_and_selects_the_brush(self):
+        cfg = config_for("--brush")
+        assert cfg.sketch is True
+        assert cfg.sketch_tool == "brush"
+
+    def test_sketch_tool_can_be_set_explicitly(self):
+        assert config_for("--sketch", "--sketch-tool", "brush").sketch_tool == "brush"
+
+    def test_the_default_tool_is_pencil(self):
+        assert config_for("--sketch").sketch_tool == "pencil"
+
+    def test_brush_width(self):
+        assert config_for("--brush", "--brush-width", "8").brush_width == 8
+
+    def test_an_unknown_tool_is_refused(self):
+        with pytest.raises(SystemExit):
+            config_for("--sketch-tool", "crayon")
+
+    def test_a_non_positive_brush_width_is_refused(self):
+        with pytest.raises(SystemExit):
+            config_for("--brush-width", "0")
+
     def test_a_non_positive_pencil_speed_is_refused(self):
         with pytest.raises(SystemExit):
             config_for("--pencil-speed", "0")
