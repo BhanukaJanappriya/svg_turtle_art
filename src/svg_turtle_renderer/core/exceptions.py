@@ -33,3 +33,11 @@ class ConfigError(SVGTurtleError):
 
 class RenderError(SVGTurtleError):
     """The rendering backend failed, typically because no display is available."""
+
+
+class RenderInterrupted(SVGTurtleError):
+    """The user asked to stop a render in progress.
+
+    Not an error: it is how the dashboard's Stop button unwinds a drawing that is
+    partway through, leaving whatever was drawn on the canvas.
+    """

@@ -154,7 +154,7 @@ class TurtleCanvas:
             # frame is presented, via frame().
             self._screen.tracer(0, 0)
 
-            self._turtle = turtle.Turtle(visible=False)
+            self._turtle = self._new_turtle()
             self._turtle.hideturtle()
             self._turtle.penup()
             self._turtle.speed(self._speed if self._speed > 0 else 0)
@@ -204,6 +204,17 @@ class TurtleCanvas:
         if self._turtle is None:
             raise RenderError("Canvas.open() must be called before drawing")
         return self._turtle
+
+    def _new_turtle(self) -> Any:
+        """Create a turtle on this canvas's screen.
+
+        A subclass that embeds turtle in an existing Tk widget overrides this to
+        bind new turtles -- the drawing pen and the cursor -- to its own screen
+        rather than turtle's global singleton.
+        """
+        import turtle
+
+        return turtle.Turtle(visible=False)
 
     # ------------------------------------------------------------------
     # Drawing
@@ -319,10 +330,8 @@ class TurtleCanvas:
 
         shape, name, colours = _CURSORS.get(kind, _CURSORS["pencil"])
         try:
-            import turtle
-
             if self._cursor is None:
-                self._cursor = turtle.Turtle(visible=False)
+                self._cursor = self._new_turtle()
                 self._cursor.penup()  # it must never draw
                 self._cursor.speed(0)
             if name not in self._screen.getshapes():
