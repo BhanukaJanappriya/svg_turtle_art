@@ -23,6 +23,7 @@ from svg_turtle_renderer.core.exceptions import SVGTurtleError
 from svg_turtle_renderer.gui import theme
 from svg_turtle_renderer.gui.render_job import run_render
 from svg_turtle_renderer.gui.tk_canvas import EmbeddedTurtleCanvas
+from svg_turtle_renderer.gui.widgets import ToggleSwitch
 from svg_turtle_renderer.parser.color_parser import WHITE, parse_color
 from svg_turtle_renderer.utils.helpers import format_duration
 from svg_turtle_renderer.utils.logger import get_logger
@@ -276,7 +277,7 @@ class Dashboard:
         """Build the pencil and brush toggle and the relevant width slider."""
         section = self._section(rail, "Tool")
 
-        toggle = tk.Frame(section, bg=theme.SURFACE_2)
+        toggle = tk.Frame(section, bg=theme.LINE)
         toggle.pack(fill="x")
         self._tool_buttons: dict[str, tk.Label] = {}
         for value, label in (("pencil", "Pencil"), ("brush", "Brush")):
@@ -285,11 +286,13 @@ class Dashboard:
                 text=label,
                 font=self._fonts.button,
                 padx=10,
-                pady=7,
+                pady=8,
                 cursor="hand2",
             )
             btn.pack(side="left", fill="x", expand=True, padx=1, pady=1)
             btn.bind("<Button-1>", lambda _e, v=value: self._select_tool(v))  # type: ignore[misc]
+            btn.bind("<Enter>", lambda _e, v=value: self._hover_tool(v, True))  # type: ignore[misc]
+            btn.bind("<Leave>", lambda _e, v=value: self._hover_tool(v, False))  # type: ignore[misc]
             self._tool_buttons[value] = btn
 
         self._pencil_slider = self._slider(
@@ -479,26 +482,24 @@ class Dashboard:
 
     def _check(
         self, parent: tk.Frame, label: str, var: tk.BooleanVar, command: Any = None
-    ) -> tk.Checkbutton:
-        """Return a themed checkbox."""
-        chk = tk.Checkbutton(
-            parent,
-            text=label,
-            variable=var,
-            command=command or (lambda: None),
-            bg=theme.SURFACE,
-            fg=theme.TEXT,
-            selectcolor=theme.SURFACE_2,
-            activebackground=theme.SURFACE,
-            activeforeground=theme.TEXT,
-            font=self._fonts.body,
-            anchor="w",
-            bd=0,
-            highlightthickness=0,
-            cursor="hand2",
+    ) -> tk.Frame:
+        """Return a labelled row with an animated toggle switch.
+
+        The whole row is clickable, not just the switch, so a setting is easy to
+        hit; the switch itself makes its state obvious at a glance.
+        """
+        row = tk.Frame(parent, bg=theme.SURFACE, cursor="hand2")
+        row.pack(fill="x", pady=(9, 0))
+        name = tk.Label(
+            row, text=label, bg=theme.SURFACE, fg=theme.TEXT, font=self._fonts.body, anchor="w"
         )
-        chk.pack(fill="x", pady=(8, 0))
-        return chk
+        name.pack(side="left")
+        switch = ToggleSwitch(row, var, command)
+        switch.pack(side="right")
+        # Clicking the label toggles the switch too.
+        for widget in (row, name):
+            widget.bind("<Button-1>", lambda _e, s=switch: s.toggle())  # type: ignore[misc]
+        return row
 
     def _swatch(
         self,
@@ -582,6 +583,15 @@ class Dashboard:
         self.tool.set(value)
         self._sync_tool_controls()
 
+    def _hover_tool(self, value: str, entering: bool) -> None:
+        """Lift an unselected tool button while the pointer is over it."""
+        if value == self.tool.get():
+            return
+        self._tool_buttons[value].configure(
+            bg=theme.LINE if entering else theme.SURFACE_2,
+            fg=theme.TEXT if entering else theme.MUTED,
+        )
+
     def _sync_tool_controls(self) -> None:
         """Reflect the tool and animate state in the toggle and sliders."""
         for value, btn in self._tool_buttons.items():
@@ -636,6 +646,7 @@ class Dashboard:
             input_path=input_path,
             canvas_width=width,
             canvas_height=height,
+            margin=32.0,  # keep the artwork clear of the panel edges
             background=self.background.get() or "white",
             sketch=sketching,
             sketch_tool="brush" if self.tool.get() == "brush" else "pencil",
