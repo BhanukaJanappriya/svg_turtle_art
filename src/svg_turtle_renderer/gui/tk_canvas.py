@@ -73,9 +73,32 @@ class EmbeddedTurtleCanvas(TurtleCanvas):
         except Exception as exc:  # pragma: no cover - depends on the display
             raise RenderError(f"Could not attach a turtle canvas: {exc}") from exc
 
-        self._widget.update_idletasks()
-        self._size = (max(self._widget.winfo_width(), 1), max(self._widget.winfo_height(), 1))
+        self._apply_size()
         return self._size
+
+    def _apply_size(self) -> None:
+        """Match turtle's coordinate origin to the real centre of the widget.
+
+        Embedding turtle in a plain ``tkinter.Canvas`` is where this bites: on
+        construction turtle reads the canvas's *configured* width and height --
+        the widget default, around 378x265 -- not the size it is stretched to
+        once packed. It then centres its origin on that phantom size, so the
+        origin lands well up and to the left of the true centre and the artwork
+        clips off the top-left corner.
+
+        Re-reading the widget's real size and centring the scroll region on it
+        puts turtle's ``(0, 0)`` back at the middle of the panel, so a drawing
+        fitted about the origin sits squarely in the centre with its margins
+        intact.
+        """
+        width = max(self._widget.winfo_width(), 1)
+        height = max(self._widget.winfo_height(), 1)
+        self._size = (width, height)
+        half_w, half_h = width / 2.0, height / 2.0
+        try:
+            self._screen.cv.config(scrollregion=(-half_w, -half_h, half_w, half_h))
+        except Exception as exc:  # pragma: no cover - depends on the widget state
+            logger.debug("Could not centre the canvas: %s", exc)
 
     def set_background(self, background: Color) -> None:
         """Change the page colour of the live canvas."""
@@ -95,9 +118,9 @@ class EmbeddedTurtleCanvas(TurtleCanvas):
         self.frame()
 
     def refit(self) -> tuple[int, int]:
-        """Re-read the widget size after a resize and return it."""
+        """Re-read the widget size after a resize, recentre, and return it."""
         self._widget.update_idletasks()
-        self._size = (max(self._widget.winfo_width(), 1), max(self._widget.winfo_height(), 1))
+        self._apply_size()
         return self._size
 
     def close(self) -> None:
