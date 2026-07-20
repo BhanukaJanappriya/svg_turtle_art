@@ -106,7 +106,12 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=_EPILOG,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("input", metavar="INPUT.SVG", help="the SVG file to render")
+    parser.add_argument("input", metavar="INPUT.SVG", nargs="?", help="the SVG file to render")
+    parser.add_argument(
+        "--gui",
+        action="store_true",
+        help="open the desktop dashboard instead of rendering directly",
+    )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument(
         "--config",
@@ -365,6 +370,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         A process exit code.
 
     """
+    args = build_parser().parse_args(argv)
+
+    if args.gui:
+        # The dashboard is preloaded with the input file when one was given.
+        configure_logging(verbose=args.verbose, quiet=args.quiet)
+        from svg_turtle_renderer.gui.dashboard import launch
+
+        return launch([args.input] if args.input else [])
+
+    if not args.input:
+        print("error: an input SVG file is required (or pass --gui)", file=sys.stderr)
+        return EXIT_USAGE
+
     try:
         config = build_config(argv)
     except SVGTurtleError as exc:

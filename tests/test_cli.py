@@ -22,9 +22,11 @@ class TestDefaults:
     def test_the_input_path_is_positional(self):
         assert config_for().input_path == "input.svg"
 
-    def test_the_input_is_required(self, capsys):
-        with pytest.raises(SystemExit):
-            build_parser().parse_args([])
+    def test_the_input_is_required_to_render(self, capsys):
+        # Input is optional at parse time (so --gui can run without a file), but
+        # a direct render with no input is a usage error.
+        assert main([]) == EXIT_USAGE
+        assert "input SVG file is required" in capsys.readouterr().err
 
     def test_sensible_defaults(self):
         cfg = config_for()

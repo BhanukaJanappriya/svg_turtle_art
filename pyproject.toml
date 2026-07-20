@@ -39,6 +39,7 @@ Issues = "https://github.com/bhanuka/svg-turtle-renderer/issues"
 
 [project.scripts]
 svg-turtle = "svg_turtle_renderer.cli:main"
+svg-turtle-studio = "svg_turtle_renderer.gui.dashboard:launch"
 
 [tool.setuptools.packages.find]
 where = ["src"]
