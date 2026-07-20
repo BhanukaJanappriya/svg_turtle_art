@@ -78,6 +78,45 @@ def _renders_several() -> None:
             raise AssertionError(f"{name}: nothing was painted")
 
 
+@check("the dashboard opens, draws and stays open")
+def _dashboard() -> None:
+    # Build the dashboard, draw a file on its embedded canvas stopping partway,
+    # and confirm the window is still there afterwards. This exercises the whole
+    # GUI drawing path: the embedded canvas, the GUI clock and the stop signal.
+    from svg_turtle_renderer.gui.dashboard import Dashboard
+
+    sample = ROOT / "assets" / "sample.svg"
+    if not sample.exists():
+        return
+
+    dash = Dashboard([str(sample)])
+    root = dash._root
+    root.geometry("1000x700")
+    root.update()
+
+    dash.duration.set(3.0)
+    dash._file_list.selection_set(0)
+    canvas = dash._ensure_canvas()
+
+    frames = {"n": 0}
+    original = canvas.frame
+
+    def counting():
+        original()
+        frames["n"] += 1
+        if frames["n"] >= 30:
+            dash._stop_requested = True
+
+    canvas.frame = counting
+    dash._on_draw()  # blocks, pumping, until the stop trips
+
+    if dash._rendering:
+        raise AssertionError("render did not return control")
+    if not root.winfo_exists():
+        raise AssertionError("the window closed itself after drawing")
+    root.destroy()
+
+
 @check("export always writes a file")
 def _exports() -> None:
     with tempfile.TemporaryDirectory() as directory:

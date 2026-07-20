@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Desktop studio** (`python main.py --gui`, or the `svg-turtle-studio` command).
+  A tkinter dashboard that queues SVG files and draws them on an embedded turtle
+  canvas, with controls for the tool (pencil or brush), width, duration, frame
+  rate, colours, fill options and colour mode. The window stays open until it is
+  closed deliberately; a finished render never dismisses it. Stop halts a drawing
+  at once and keeps what was drawn; Export saves the canvas.
+  - `EmbeddedTurtleCanvas` draws into a `TurtleScreen` the dashboard owns,
+    reusing every drawing method from the windowed canvas.
+  - `GuiClock` paces the render by pumping the Tk event loop instead of sleeping,
+    so the controls stay live and Stop responds at once, on one thread and
+    without turtle's thread-unsafety.
+  - The rail scrolls when its controls do not all fit, with Draw and Stop pinned
+    to a footer so they are always in reach.
+
 - **Brush sketch tool** (`--brush`, or `--sketch-tool brush`). The brush traces
   outlines in thick coloured strokes and paints the fill in visible horizontal
   courses rather than clipped bands. Each row is a wide stroke drawn only across

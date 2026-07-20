@@ -4,7 +4,8 @@ Render SVG artwork with Python's Turtle Graphics — accurately enough that the
 result looks like the original, not like a tracing of it.
 
 ```bash
-python main.py artwork.svg
+python main.py artwork.svg          # render one file
+python main.py --gui                # open the desktop studio
 ```
 
 ![Sample render](docs/images/showcase.png)
@@ -18,6 +19,7 @@ in 11 ms. Pixel-identical to an independent nonzero-winding rasteriser.*
 
 - [Why this exists](#why-this-exists)
 - [Features](#features)
+- [The desktop studio](#the-desktop-studio)
 - [Installation](#installation)
 - [Usage](#usage)
 - [CLI reference](#cli-reference)
@@ -75,6 +77,32 @@ something an even-odd backend can actually draw.
 - **Export** — PNG (via Ghostscript, or a screen grab, or EPS as a last resort).
 - **Performance tools** — Douglas–Peucker simplification, pen-travel ordering,
   adjustable curve resolution, progress bars, statistics.
+- **Desktop studio** — a dashboard to queue files, pick the tool and timing, and
+  watch the drawing on an embedded canvas that stays open until you close it.
+
+## The desktop studio
+
+```bash
+python main.py --gui          # or: svg-turtle-studio
+```
+
+![The dashboard](docs/images/dashboard.png)
+
+*The studio at rest, and drawing a queued file on its embedded canvas.*
+
+A control rail beside the canvas: queue SVG files, choose the pencil or the
+brush, set the duration and frame rate, pick the paper and ink colours, and press
+**Draw**. The drawing appears in the panel rather than a throwaway window, and it
+stays there — a finished render never dismisses it, and only closing the window
+ends the session. **Stop** halts a drawing at once and leaves what was drawn;
+**Export PNG** saves the canvas.
+
+The whole thing runs on one thread. The render is paced by a clock that pumps the
+event loop between frames instead of sleeping (`gui/tk_canvas.py`), so the
+controls stay live and Stop responds immediately, without threads and turtle's
+thread-unsafety. The canvas itself is the standard renderer drawing into an
+embedded `TurtleScreen`, so the pencil, the brush and the streaming fill behave
+exactly as they do from the command line.
 
 ## Installation
 
@@ -117,6 +145,9 @@ see [Export](#export-notes).
 ## Usage
 
 ```bash
+# The desktop studio, optionally preloaded with a file
+python main.py --gui artwork.svg
+
 # Automatic fit, drawn instantly
 python main.py artwork.svg
 
@@ -167,7 +198,8 @@ print(len(canvas.fills), "fills,", len(canvas.strokes), "strokes")
 
 | Flag | Default | Meaning |
 | --- | --- | --- |
-| `INPUT.SVG` | — | The file to render (positional) |
+| `INPUT.SVG` | — | The file to render (positional, optional with `--gui`) |
+| `--gui` | off | Open the desktop studio instead of rendering directly |
 | `--config FILE.JSON` | — | Load settings from JSON; flags still win |
 | **Canvas** | | |
 | `--width N` | `1000` | Window width in pixels |
@@ -260,12 +292,15 @@ nothing below the parser knows what XML is.
   └───────────────┴────────────────────┴─────────────────┘
                            │
                            ▼
-                  utils/ (logger, helpers)
+                  utils/ (logger, helpers, progress)
+
+  gui/ (dashboard, tk_canvas, render_job, theme) sits above core and
+  renderer, embedding the same canvas in a tkinter control panel.
 ```
 
 The seam that matters is `renderer/canvas.py`. `PathRenderer` draws against a
 `Canvas` **protocol**, never against turtle directly, so the entire pipeline runs
-headless against a `RecordingCanvas`. That is why 596 of the 597 tests need no
+headless against a `RecordingCanvas`. That is why 610 of the 611 tests need no
 display.
 
 ## The rendering pipeline
@@ -484,13 +519,17 @@ Install Ghostscript for route 1.
 ## Testing
 
 ```bash
-pytest                    # 597 tests, no display needed, ~4 s
+pytest                    # 611 tests, no display needed, ~4 s
 pytest -m display -s      # window smoke test (needs a screen)
 python scripts/smoke_render.py   # multi-window end-to-end checks
 ```
 
-Coverage is 89%. The pipeline is tested against the `Canvas` protocol rather than
-a real window, so the default suite is fast and deterministic.
+Coverage is 89% of the rendering pipeline, which is tested against the `Canvas`
+protocol rather than a real window, so the default suite is fast and
+deterministic. The desktop studio pulls the overall figure to about 75%: its
+tkinter widgets need a screen, so the GUI's pure logic (pacing, progress) is
+unit-tested and the rest is exercised by `scripts/smoke_render.py`, which draws a
+file on the dashboard under a real display.
 
 Display tests are deselected by default and run with `-s`. This is not squeamishness:
 Tk is unreliable when one process creates many interpreters, and pytest's
@@ -505,7 +544,8 @@ fine. See `CONTRIBUTING.md`.
 - [ ] Exact `clipPath` outlines (polygon boolean operations)
 - [ ] CSS stylesheet and selector support
 - [ ] `stroke-dasharray`
-- [ ] GIF export of the drawing animation
+- [ ] Video / GIF export of the drawing animation, from the studio
+- [ ] A file queue that draws in sequence, for playlists and batches
 - [ ] Pause / resume and zoom / pan controls
 
 ## Contributing
