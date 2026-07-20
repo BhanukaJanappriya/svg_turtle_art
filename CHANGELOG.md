@@ -22,6 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     without turtle's thread-unsafety.
   - The rail scrolls when its controls do not all fit, with Draw and Stop pinned
     to a footer so they are always in reach.
+  - The artwork is centred in the panel with margins on every side. Turtle reads
+    a plain canvas widget's default size, not its stretched size, and centred its
+    origin on that phantom, so drawings clipped off the top-left; the embedded
+    canvas now recentres the scroll region on the widget's real size.
+  - Settings use animated toggle switches instead of Tk's near-invisible
+    checkboxes, so each one's state reads at a glance and flipping it slides.
 
 - **Brush sketch tool** (`--brush`, or `--sketch-tool brush`). The brush traces
   outlines in thick coloured strokes and paints the fill in visible horizontal

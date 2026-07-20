@@ -114,6 +114,23 @@ def _dashboard() -> None:
         raise AssertionError("render did not return control")
     if not root.winfo_exists():
         raise AssertionError("the window closed itself after drawing")
+
+    # The embedded canvas must be centred on the widget, not on turtle's phantom
+    # default size, or the artwork clips off the top-left.
+    region = [float(v) for v in canvas._screen.cv.cget("scrollregion").split()]
+    width = canvas._widget.winfo_width()
+    if abs(region[0] + region[2]) > 1.0 or abs(region[2] - width / 2) > 2.0:
+        raise AssertionError(f"canvas is not centred: scrollregion {region}, width {width}")
+
+    # The appearance toggles must reflect and flip their variable.
+    from svg_turtle_renderer.gui.widgets import ToggleSwitch
+
+    switch = ToggleSwitch(root, dash.fill_flow)
+    before = dash.fill_flow.get()
+    switch.toggle()
+    if dash.fill_flow.get() == before:
+        raise AssertionError("the toggle did not change its variable")
+
     root.destroy()
 
 
