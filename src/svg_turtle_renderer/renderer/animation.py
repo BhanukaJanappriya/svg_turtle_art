@@ -90,6 +90,44 @@ class FrameClock:
         self._present()
 
 
+class CaptureClock:
+    """Presents every frame with no pacing, for recording an animation offline.
+
+    A GIF wants exactly the frames the renderer intends to draw, as fast as they
+    can be produced; there is no screen to keep up with and no reason to wait. So
+    this simply presents on every tick, which for a raster canvas means capturing
+    a snapshot each time.
+
+    Args:
+        present: The callback that captures or redraws a frame.
+
+    """
+
+    def __init__(self, present: Callable[[], None]) -> None:
+        """Store the presentation callback."""
+        self._present = present
+        self._frames = 0
+
+    @property
+    def frames_presented(self) -> int:
+        """Return how many frames have been presented."""
+        return self._frames
+
+    def start(self) -> None:
+        """Reset the frame count."""
+        self._frames = 0
+
+    def tick(self) -> None:
+        """Present and count one frame."""
+        self._present()
+        self._frames += 1
+
+    def final(self) -> None:
+        """Present the finished frame."""
+        self._present()
+        self._frames += 1
+
+
 class SketchClock:
     """Holds a steady frame rate by waiting, for the pencil sketch effect.
 

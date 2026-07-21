@@ -4,7 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from svg_turtle_renderer.renderer.animation import Clock, FrameClock, SketchClock
+from svg_turtle_renderer.renderer.animation import (
+    CaptureClock,
+    Clock,
+    FrameClock,
+    SketchClock,
+)
 
 
 class Recorder:
@@ -212,8 +217,29 @@ class TestSketchClock:
         assert SketchClock(0, Recorder())._interval == 1.0
 
 
+class TestCaptureClock:
+    def test_it_presents_every_tick_without_pacing(self):
+        # For an offline recording there is no screen to keep up with, so every
+        # intended frame is presented, none dropped.
+        present = Recorder()
+        clock = CaptureClock(present)
+        clock.start()
+        for _ in range(50):
+            clock.tick()
+        assert present.calls == 50
+
+    def test_frames_are_counted(self):
+        clock = CaptureClock(Recorder())
+        clock.start()
+        clock.tick()
+        clock.tick()
+        clock.final()
+        assert clock.frames_presented == 3
+
+
 class TestClockProtocol:
-    def test_both_clocks_satisfy_the_protocol(self):
-        # The renderer depends on the protocol, not on either class.
+    def test_all_clocks_satisfy_the_protocol(self):
+        # The renderer depends on the protocol, not on any concrete class.
         assert isinstance(FrameClock(30, Recorder()), Clock)
         assert isinstance(SketchClock(30, Recorder()), Clock)
+        assert isinstance(CaptureClock(Recorder()), Clock)
