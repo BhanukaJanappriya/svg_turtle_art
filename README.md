@@ -74,7 +74,9 @@ something an even-odd backend can actually draw.
 - **Auto-fit** — aspect-preserving scale-to-canvas, centring, margins, rotation,
   mirror and flip.
 - **Themes and colour modes** — original, monochrome, random; five presets.
-- **Export** — PNG (via Ghostscript, or a screen grab, or EPS as a last resort).
+- **Export** — record the drawing as an animated **GIF**, or save a still PNG.
+  Both render headlessly into a Pillow image, so they work on a server and need
+  no Ghostscript.
 - **Performance tools** — Douglas–Peucker simplification, pen-travel ordering,
   adjustable curve resolution, progress bars, statistics.
 - **Desktop studio** — a dashboard to queue files, pick the tool and timing, and
@@ -156,6 +158,12 @@ python main.py artwork.svg --sketch
 
 # Paint it with a brush instead, taking exactly 45 seconds however big it is
 python main.py artwork.svg --brush --duration 45
+
+# Record the drawing as an animated GIF (headless, no window, no Ghostscript)
+python main.py artwork.svg --export drawing.gif --duration 8
+
+# A clean still PNG, also headless
+python main.py artwork.svg --export still.png --headless
 
 # Sketch in graphite
 python main.py artwork.svg --sketch --pencil-color '#555'
@@ -242,7 +250,8 @@ print(len(canvas.fills), "fills,", len(canvas.strokes), "strokes")
 | `--simplify PX` | `0` | Drop vertices within this many pixels of the line |
 | `--optimize-order` | off | Reorder shapes to shorten pen travel |
 | **Output** | | |
-| `--export`, `-o FILE` | — | Save the canvas |
+| `--export`, `-o FILE` | — | Save the drawing; `.gif` records the animation, else the still |
+| `--headless` | off | Render straight to the file with no window (needs Pillow) |
 | `--stats` | off | Print statistics |
 | `--no-show-progress` | — | Hide the progress bar |
 | `--strict` | off | Fail on malformed SVG instead of recovering |
@@ -506,15 +515,19 @@ Ordered by how likely they are to bite.
 
 ### Export notes
 
-Tk can only export PostScript, so `--export out.png` tries, in order:
+The recommended path is **headless raster export**: `--export out.gif` (an
+animation) or `--export out.png --headless` (a still) draw straight into a Pillow
+image with no window, supersampled for smooth edges. This works on a server and
+needs only Pillow — no Ghostscript, no display.
 
-1. **Pillow + Ghostscript** — a true render of the vector canvas. Best quality.
-2. **Screen grab** — no Ghostscript needed, but it captures the window's actual
-   pixels, so anything overlapping it appears in the image, and the window must
-   fit on screen.
-3. **`.eps`** — the drawing is never silently lost.
+A GIF is always drawn as a sketch so it shows the drawing being made; the frames
+are captured at the render rate and thinned to keep the file small.
 
-Install Ghostscript for route 1.
+The older path, saving the *live* turtle window with `--export out.png` (no
+`--headless`), still exists and tries, in order: Pillow + Ghostscript (a true
+vector render), a screen grab (no Ghostscript, but it captures the window's
+actual pixels), then `.eps`. Prefer `--headless` unless you specifically want the
+on-screen window captured.
 
 ## Testing
 
@@ -544,7 +557,8 @@ fine. See `CONTRIBUTING.md`.
 - [ ] Exact `clipPath` outlines (polygon boolean operations)
 - [ ] CSS stylesheet and selector support
 - [ ] `stroke-dasharray`
-- [ ] Video / GIF export of the drawing animation, from the studio
+- [x] Animated GIF export of the drawing, from the CLI and the studio
+- [ ] MP4 / WebM video export (ffmpeg) for longer, smaller animations
 - [ ] A file queue that draws in sequence, for playlists and batches
 - [ ] Pause / resume and zoom / pan controls
 

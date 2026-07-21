@@ -9,6 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Animated GIF export** and a headless still export. `--export drawing.gif`
+  records the drawing being made, frame by frame; `--export still.png --headless`
+  saves the finished image. Both go through a new Pillow raster backend that
+  draws the `Canvas` operations straight into an image, so they run with no
+  window and need no Ghostscript, and the still comes out clean rather than a
+  screenshot. The studio gains Save PNG and Save GIF buttons.
+  - The raster backend supersamples and downscales for smooth edges, fills holes
+    by scanline for the even-odd rule, and rounds thick stroke caps.
+  - `CaptureClock` presents every intended frame with no pacing, which is what a
+    GIF needs; frames are thinned to a cap and the delay stretched to hold the
+    timing.
+
 - **Desktop studio** (`python main.py --gui`, or the `svg-turtle-studio` command).
   A tkinter dashboard that queues SVG files and draws them on an embedded turtle
   canvas, with controls for the tool (pencil or brush), width, duration, frame
