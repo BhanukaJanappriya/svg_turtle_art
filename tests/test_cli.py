@@ -209,6 +209,22 @@ class TestOutputFlags:
     def test_headless_is_a_flag(self):
         assert config_for("--headless").headless is True
 
+    def test_a_gcode_export_writes_toolpaths(self, svg_file, tmp_path):
+        svg = svg_file(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">'
+            '<rect x="2" y="2" width="16" height="16" fill="none" stroke="black"/></svg>'
+        )
+        out = tmp_path / "plot.gcode"
+        code = main([svg, "--export", str(out), "--bed", "150x150"])
+        assert code == 0
+        text = out.read_text()
+        assert "G21" in text  # millimetres
+        assert text.strip().endswith("M2 ; end")
+
+    def test_a_bad_bed_size_is_refused(self):
+        with pytest.raises(SystemExit):
+            config_for("--bed", "nonsense")
+
     def test_a_gif_export_renders_headlessly(self, svg_file, tmp_path):
         pytest.importorskip("PIL")
         from PIL import Image

@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     GIF needs; frames are thinned to a cap and the delay stretched to hold the
     timing.
 
+- **Pen-plotter G-code export.** `--export plot.gcode` writes toolpaths for a pen
+  plotter (AxiDraw and similar) rather than pixels: every outline becomes a
+  stroke -- lift, travel, lower, trace, lift -- with fills traced as their
+  outline. The drawing is fitted to `--bed WxH` millimetres with the aspect ratio
+  kept, the strokes are ordered to shorten the pen's travel, and `--simplify`
+  thins the points. Pen-up and pen-down commands default to Z moves and are
+  overridable for a servo pen.
+
 - **Draw the queue in sequence** in the studio. "Draw all in sequence" turns the
   file queue into a playlist: each file is drawn in turn, held a moment, then the
   canvas is cleared for the next. Stop ends the whole run, and a file that will

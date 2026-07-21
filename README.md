@@ -74,9 +74,9 @@ something an even-odd backend can actually draw.
 - **Auto-fit** — aspect-preserving scale-to-canvas, centring, margins, rotation,
   mirror and flip.
 - **Themes and colour modes** — original, monochrome, random; five presets.
-- **Export** — record the drawing as an animated **GIF**, or save a still PNG.
-  Both render headlessly into a Pillow image, so they work on a server and need
-  no Ghostscript.
+- **Export** — record the drawing as an animated **GIF**, save a still PNG, or
+  write **pen-plotter G-code**. The image exports render headlessly into a Pillow
+  image, so they work on a server and need no Ghostscript.
 - **Performance tools** — Douglas–Peucker simplification, pen-travel ordering,
   adjustable curve resolution, progress bars, statistics.
 - **Desktop studio** — a dashboard to queue files, pick the tool and timing, and
@@ -167,6 +167,9 @@ python main.py artwork.svg --export drawing.gif --duration 8
 # A clean still PNG, also headless
 python main.py artwork.svg --export still.png --headless
 
+# Pen-plotter toolpaths for an A5 bed (AxiDraw and friends)
+python main.py artwork.svg --export plot.gcode --bed 148x210 --simplify 0.3
+
 # Sketch in graphite
 python main.py artwork.svg --sketch --pencil-color '#555'
 
@@ -252,8 +255,10 @@ print(len(canvas.fills), "fills,", len(canvas.strokes), "strokes")
 | `--simplify PX` | `0` | Drop vertices within this many pixels of the line |
 | `--optimize-order` | off | Reorder shapes to shorten pen travel |
 | **Output** | | |
-| `--export`, `-o FILE` | — | Save the drawing; `.gif` records the animation, else the still |
+| `--export`, `-o FILE` | — | Save the drawing; `.gif` animates, `.gcode` plots, else a still |
 | `--headless` | off | Render straight to the file with no window (needs Pillow) |
+| `--bed WxH` | `210x297` | Plotter bed size in mm for a `.gcode` export |
+| `--feed N` | `1000` | Plotter drawing speed in mm/min |
 | `--stats` | off | Print statistics |
 | `--no-show-progress` | — | Hide the progress bar |
 | `--strict` | off | Fail on malformed SVG instead of recovering |
@@ -274,6 +279,7 @@ Exit codes: `0` success, `1` render error, `2` bad usage, `130` interrupted.
 | Styling | presentation attributes, inline `style` | `<style>` sheets, class selectors |
 | Clipping | `clipPath` (to its bounding box) | exact outlines, `mask` |
 | Strokes | colour, width | `stroke-dasharray`, `linecap`, `linejoin` |
+| Export | GIF, PNG, pen-plotter G-code | MP4 / WebM |
 
 Unsupported constructs are skipped with a warning rather than guessed at. A
 `fill="url(#gradient)"` shape is left unpainted, because painting it some
@@ -531,6 +537,16 @@ vector render), a screen grab (no Ghostscript, but it captures the window's
 actual pixels), then `.eps`. Prefer `--headless` unless you specifically want the
 on-screen window captured.
 
+### Pen plotters
+
+`--export plot.gcode` writes G-code for a pen plotter (AxiDraw and similar)
+instead of pixels. Every outline becomes a stroke — lift the pen, travel to the
+start, lower it, trace, lift again — with fills traced as their outline, since a
+pen cannot fill. The drawing is fitted to `--bed WxH` millimetres with the aspect
+ratio kept, the strokes are ordered to shorten the pen's travel, and `--simplify`
+thins the points. The pen-up and pen-down commands default to `Z` moves; override
+them in `GCodeOptions` from the library for a servo pen.
+
 ## Testing
 
 ```bash
@@ -561,6 +577,7 @@ fine. See `CONTRIBUTING.md`.
 - [ ] `stroke-dasharray`
 - [x] Animated GIF export of the drawing, from the CLI and the studio
 - [x] A file queue that draws in sequence, in the studio
+- [x] Pen-plotter G-code export
 - [ ] MP4 / WebM video export (ffmpeg) for longer, smaller animations
 - [ ] Batch export of a folder of SVGs to GIFs from the command line
 - [ ] Pause / resume and zoom / pan controls

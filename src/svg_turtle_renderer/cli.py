@@ -87,6 +87,20 @@ def _positive_float(value: str) -> float:
     return number
 
 
+def _bed_size(value: str) -> tuple[float, float]:
+    """Parse a ``WIDTHxHEIGHT`` plotter bed size in millimetres."""
+    parts = value.lower().replace("mm", "").split("x")
+    if len(parts) != 2:
+        raise argparse.ArgumentTypeError(f"expected WIDTHxHEIGHT, got {value!r}")
+    try:
+        width, height = float(parts[0]), float(parts[1])
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"bed dimensions must be numbers, got {value!r}") from None
+    if width <= 0 or height <= 0:
+        raise argparse.ArgumentTypeError(f"bed dimensions must be positive, got {value!r}")
+    return (width, height)
+
+
 def _non_negative_float(value: str) -> float:
     """Parse a float that must not be negative."""
     try:
@@ -296,6 +310,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="render straight to the export file with no window (needs Pillow)",
     )
+    output.add_argument(
+        "--bed",
+        type=_bed_size,
+        metavar="WxH",
+        help="plotter bed size in mm for a .gcode export (default 210x297)",
+    )
+    output.add_argument(
+        "--feed", type=_positive_float, metavar="MM_MIN", help="plotter drawing speed (mm/min)"
+    )
     output.add_argument("--stats", action="store_true", default=None, help="print statistics")
     output.add_argument(
         "--show-progress",
@@ -371,6 +394,36 @@ def build_config(argv: Sequence[str] | None = None) -> RenderConfig:
     return RenderConfig(**overrides, _explicit=frozenset(overrides))
 
 
+def _export_gcode(config: RenderConfig, args: argparse.Namespace) -> int:
+    """Parse the input and write pen-plotter G-code to the export path."""
+    from svg_turtle_renderer.core.gcode import GCodeOptions, to_gcode
+    from svg_turtle_renderer.parser.svg_parser import SVGParser
+
+    drawing = SVGParser(resolution=config.resolution, strict=config.strict).parse_file(
+        config.input_path
+    )
+    bed = args.bed or (210.0, 297.0)
+    options = GCodeOptions(
+        bed_width=bed[0],
+        bed_height=bed[1],
+        margin=config.margin,
+        feed=args.feed or 1000.0,
+        simplify=config.simplify,
+        optimize=config.optimize_order or True,
+    )
+    text = to_gcode(drawing, options)
+    from pathlib import Path
+
+    destination = Path(config.output_path)  # type: ignore[arg-type]
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(text, encoding="utf-8")
+    logger.info("Wrote %s (%d lines)", destination, text.count("\n"))
+    if config.stats:
+        strokes = sum(1 for line in text.splitlines() if line.startswith("G0 X"))
+        print(f"Plotter G-code: {strokes} strokes, bed {bed[0]:g}x{bed[1]:g} mm")
+    return EXIT_OK
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command-line interface.
 
@@ -402,6 +455,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USAGE
 
     configure_logging(verbose=config.verbose, quiet=config.quiet)
+
+    # A .gcode export writes pen-plotter toolpaths, not pixels; it needs neither
+    # a window nor Pillow.
+    if config.output_path and config.output_path.lower().endswith((".gcode", ".nc", ".gc")):
+        try:
+            return _export_gcode(config, args)
+        except SVGTurtleError as exc:
+            logger.error("%s", exc)
+            return EXIT_ERROR
 
     # A .gif export is recorded headlessly, frame by frame, with no window; the
     # same route gives a Ghostscript-free PNG when --headless is asked for.
