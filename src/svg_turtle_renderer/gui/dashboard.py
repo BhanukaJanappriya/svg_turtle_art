@@ -358,8 +358,10 @@ class Dashboard:
         utils.pack(fill="x", pady=(8, 0))
         self._clear_canvas_button = self._ghost_button(utils, "Clear canvas", self._on_clear_canvas)
         self._clear_canvas_button.pack(side="left")
-        self._export_button = self._ghost_button(utils, "Export PNG", self._on_export)
-        self._export_button.pack(side="right")
+        self._gif_button = self._ghost_button(utils, "Save GIF", self._on_export_gif)
+        self._gif_button.pack(side="right")
+        self._export_button = self._ghost_button(utils, "Save PNG", self._on_export)
+        self._export_button.pack(side="right", padx=(0, 6))
 
     def _build_statusbar(self) -> None:
         """Build the progress bar and status line along the bottom."""
@@ -752,6 +754,47 @@ class Dashboard:
             return
         self._status.configure(text=f"Exported {Path(written).name}", fg=theme.GOOD)
 
+    def _on_export_gif(self) -> None:
+        """Record the selected file's drawing as an animated GIF.
+
+        The GIF is rendered headlessly from the current settings rather than
+        captured off the live canvas, so it comes out clean and needs no
+        Ghostscript. It reuses whatever tool, duration and colours are set.
+        """
+        if self._rendering:
+            return
+        index = self._selected_index()
+        if index is None:
+            messagebox.showinfo("SVG Turtle Studio", "Add and select an SVG file first.")
+            return
+        path = filedialog.asksaveasfilename(
+            title="Save GIF", defaultextension=".gif", filetypes=[("Animated GIF", "*.gif")]
+        )
+        if not path:
+            return
+
+        from svg_turtle_renderer.core.export import export as export_headless
+
+        try:
+            config = self._build_config(self._files[index]).with_overrides(sketch=True)
+        except SVGTurtleError as exc:
+            messagebox.showerror("Cannot record", str(exc))
+            return
+
+        self._set_running(True)
+        self._status.configure(text="Recording GIF", fg=theme.TEXT)
+        self._root.update()
+        try:
+            stats = export_headless(config, path)
+        except SVGTurtleError as exc:
+            self._status.configure(text=f"GIF failed: {exc}", fg=theme.DANGER)
+            return
+        finally:
+            self._set_running(False)
+        self._status.configure(
+            text=f"Saved {Path(path).name} — {stats.frames} frames", fg=theme.GOOD
+        )
+
     # ------------------------------------------------------------------
     # Progress and status
     # ------------------------------------------------------------------
@@ -783,7 +826,7 @@ class Dashboard:
         self._rendering = running
         self._draw_button.configure(state="disabled" if running else "normal")
         self._stop_button.configure(state="normal" if running else "disabled")
-        for button in (self._clear_canvas_button, self._export_button):
+        for button in (self._clear_canvas_button, self._export_button, self._gif_button):
             button.configure(state="disabled" if running else "normal")
 
     # ------------------------------------------------------------------
