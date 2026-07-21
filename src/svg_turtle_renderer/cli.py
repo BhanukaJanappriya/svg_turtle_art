@@ -283,7 +283,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     output = parser.add_argument_group("output")
     output.add_argument(
-        "--export", "--output", "-o", dest="output", metavar="FILE.PNG", help="save the canvas"
+        "--export",
+        "--output",
+        "-o",
+        dest="output",
+        metavar="FILE",
+        help="save the drawing; a .gif records the animation, other extensions save the still",
+    )
+    output.add_argument(
+        "--headless",
+        action="store_true",
+        default=None,
+        help="render straight to the export file with no window (needs Pillow)",
     )
     output.add_argument("--stats", action="store_true", default=None, help="print statistics")
     output.add_argument(
@@ -391,6 +402,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         return EXIT_USAGE
 
     configure_logging(verbose=config.verbose, quiet=config.quiet)
+
+    # A .gif export is recorded headlessly, frame by frame, with no window; the
+    # same route gives a Ghostscript-free PNG when --headless is asked for.
+    wants_gif = config.output_path and config.output_path.lower().endswith(".gif")
+    if config.output_path and (wants_gif or config.headless):
+        try:
+            from svg_turtle_renderer.core.export import export as export_headless
+
+            stats = export_headless(config, config.output_path)
+        except SVGTurtleError as exc:
+            logger.error("%s", exc)
+            return EXIT_ERROR
+        if config.stats:
+            print(stats.format_report())
+        return EXIT_OK
 
     try:
         engine = RenderEngine(config)

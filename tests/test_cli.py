@@ -206,6 +206,25 @@ class TestOutputFlags:
     def test_progress_can_be_negated(self):
         assert config_for("--no-show-progress").show_progress is False
 
+    def test_headless_is_a_flag(self):
+        assert config_for("--headless").headless is True
+
+    def test_a_gif_export_renders_headlessly(self, svg_file, tmp_path):
+        pytest.importorskip("PIL")
+        from PIL import Image
+
+        svg = svg_file(
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">'
+            '<rect width="20" height="20" fill="red"/></svg>'
+        )
+        out = tmp_path / "cli.gif"
+        # No window opens, so this returns without a display.
+        code = main(
+            [svg, "--export", str(out), "--duration", "0.5", "--fps", "12", "--no-show-progress"]
+        )
+        assert code == 0
+        assert Image.open(out).n_frames > 1
+
     def test_stats_verbose_and_quiet(self):
         cfg = config_for("--stats", "--verbose", "--quiet")
         assert cfg.stats and cfg.verbose and cfg.quiet

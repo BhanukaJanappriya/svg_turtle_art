@@ -79,6 +79,8 @@ class RenderConfig:
         optimize_order: Reorder shapes to shorten pen travel.
         hide_turtle: Hide the cursor once drawing finishes.
         keep_open: Wait for a click before closing the window.
+        headless: Render straight to the export file with no window, using the
+            raster backend. Implied for a ``.gif`` export.
         show_progress: Display a progress bar.
         stats: Print document and timing statistics.
         strict: Fail on malformed paths and transforms instead of skipping them.
@@ -131,6 +133,7 @@ class RenderConfig:
 
     hide_turtle: bool = True
     keep_open: bool = True
+    headless: bool = False
     show_progress: bool = True
     stats: bool = False
     strict: bool = False
