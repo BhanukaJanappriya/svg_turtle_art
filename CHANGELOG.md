@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     GIF needs; frames are thinned to a cap and the delay stretched to hold the
     timing.
 
+- **Draw the queue in sequence** in the studio. "Draw all in sequence" turns the
+  file queue into a playlist: each file is drawn in turn, held a moment, then the
+  canvas is cleared for the next. Stop ends the whole run, and a file that will
+  not parse is skipped rather than halting the rest.
+
 - **Desktop studio** (`python main.py --gui`, or the `svg-turtle-studio` command).
   A tkinter dashboard that queues SVG files and draws them on an embedded turtle
   canvas, with controls for the tool (pencil or brush), width, duration, frame

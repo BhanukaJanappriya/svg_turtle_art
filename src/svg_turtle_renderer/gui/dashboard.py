@@ -273,6 +273,11 @@ class Dashboard:
         self._ghost_button(row, "Remove", self._on_remove).pack(side="left", padx=6)
         self._ghost_button(row, "Clear", self._on_clear_files).pack(side="left")
 
+        self._draw_all_button = self._ghost_button(
+            section, "Draw all in sequence", self._on_draw_all
+        )
+        self._draw_all_button.pack(fill="x", pady=(6, 0))
+
     def _build_tool_section(self, rail: tk.Frame) -> None:
         """Build the pencil and brush toggle and the relevant width slider."""
         section = self._section(rail, "Tool")
@@ -674,6 +679,21 @@ class Dashboard:
         height = max(self._canvas_widget.winfo_height(), 100)
         return width, height
 
+    def _render_file(self, canvas: EmbeddedTurtleCanvas, path: str) -> tuple[Any, bool]:
+        """Draw one file onto the canvas, paced in the event loop.
+
+        Returns the render statistics and whether the user stopped it.
+        """
+        config = self._build_config(path)
+        return run_render(
+            config,
+            canvas,
+            present=canvas.frame,
+            pump=self._root.update,
+            should_stop=lambda: self._stop_requested,
+            report=self._report_progress,
+        )
+
     def _on_draw(self) -> None:
         """Render the selected file onto the canvas."""
         if self._rendering:
@@ -687,12 +707,6 @@ class Dashboard:
             self._file_list.selection_set(0)
 
         path = self._files[index]
-        try:
-            config = self._build_config(path)
-        except SVGTurtleError as exc:
-            messagebox.showerror("Cannot draw", str(exc))
-            return
-
         canvas = self._ensure_canvas()
         if self.clear_before.get():
             canvas.clear()
@@ -702,14 +716,7 @@ class Dashboard:
         self._status.configure(text=f"Drawing {Path(path).name}", fg=theme.TEXT)
 
         try:
-            stats, stopped = run_render(
-                config,
-                canvas,
-                present=canvas.frame,
-                pump=self._root.update,
-                should_stop=lambda: self._stop_requested,
-                report=self._report_progress,
-            )
+            stats, stopped = self._render_file(canvas, path)
         except SVGTurtleError as exc:
             self._status.configure(text=f"Failed: {exc}", fg=theme.DANGER)
             logger.error("Render failed: %s", exc)
@@ -721,6 +728,69 @@ class Dashboard:
             self._set_running(False)
 
         self._report_done(Path(path).name, stats, stopped)
+
+    def _on_draw_all(self) -> None:
+        """Draw every queued file in turn, clearing the canvas between each.
+
+        The queue becomes a playlist: each drawing is made, held a moment so it
+        can be seen, then wiped for the next. Stop ends the whole run, and a file
+        that cannot be parsed is skipped rather than halting the rest.
+        """
+        if self._rendering or not self._files:
+            if not self._files:
+                messagebox.showinfo("SVG Turtle Studio", "Add some SVG files first.")
+            return
+
+        canvas = self._ensure_canvas()
+        self._set_running(True)
+        self._stop_requested = False
+        total = len(self._files)
+        drawn = 0
+
+        try:
+            for index, path in enumerate(list(self._files), start=1):
+                if self._stop_requested:
+                    break
+                self._file_list.selection_clear(0, "end")
+                self._file_list.selection_set(index - 1)
+                self._status.configure(
+                    text=f"Drawing {index} of {total}: {Path(path).name}", fg=theme.TEXT
+                )
+                canvas.clear()
+                try:
+                    _stats, stopped = self._render_file(canvas, path)
+                except SVGTurtleError as exc:
+                    logger.warning("Skipping %s: %s", path, exc)
+                    continue
+                except tk.TclError:
+                    return  # window closed
+                if stopped:
+                    break
+                drawn += 1
+                self._hold(700)  # let the finished drawing linger before the next
+        finally:
+            self._set_running(False)
+
+        if self._stop_requested:
+            self._status.configure(text=f"Stopped after {drawn} of {total}", fg=theme.MUTED)
+        else:
+            self._status.configure(text=f"Drew all {drawn} file(s)", fg=theme.GOOD)
+
+    def _hold(self, milliseconds: int) -> None:
+        """Keep the interface live for a moment without blocking it.
+
+        Used between files in a playlist so the finished drawing is seen; the
+        event loop is pumped throughout, so a Stop still lands.
+        """
+        import time
+
+        deadline = time.perf_counter() + milliseconds / 1000.0
+        while time.perf_counter() < deadline and not self._stop_requested:
+            try:
+                self._root.update()
+            except tk.TclError:
+                return
+            time.sleep(0.01)
 
     def _on_stop(self) -> None:
         """Ask the running render to stop at the next frame."""
@@ -826,7 +896,12 @@ class Dashboard:
         self._rendering = running
         self._draw_button.configure(state="disabled" if running else "normal")
         self._stop_button.configure(state="normal" if running else "disabled")
-        for button in (self._clear_canvas_button, self._export_button, self._gif_button):
+        for button in (
+            self._clear_canvas_button,
+            self._export_button,
+            self._gif_button,
+            self._draw_all_button,
+        ):
             button.configure(state="disabled" if running else "normal")
 
     # ------------------------------------------------------------------

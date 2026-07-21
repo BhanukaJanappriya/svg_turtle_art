@@ -134,6 +134,38 @@ def _dashboard() -> None:
     root.destroy()
 
 
+@check("the studio draws a queue in sequence")
+def _dashboard_playlist() -> None:
+    from svg_turtle_renderer.gui.dashboard import Dashboard
+
+    files = [ROOT / "assets" / "sample.svg", ROOT / "assets" / "examples" / "features.svg"]
+    files = [str(f) for f in files if f.exists()]
+    if len(files) < 2:
+        return
+
+    dash = Dashboard(files)
+    root = dash._root
+    root.geometry("900x680")
+    root.update()
+    dash.duration.set(1.0)
+    dash._hold = lambda _ms: root.update()  # do not linger during the test
+
+    drawn = {"n": 0}
+    canvas = dash._ensure_canvas()
+    original = canvas.clear
+
+    def counting_clear():
+        drawn["n"] += 1
+        original()
+
+    canvas.clear = counting_clear
+    dash._on_draw_all()
+
+    if drawn["n"] != len(files):
+        raise AssertionError(f"drew {drawn['n']} of {len(files)} files")
+    root.destroy()
+
+
 @check("export always writes a file")
 def _exports() -> None:
     with tempfile.TemporaryDirectory() as directory:

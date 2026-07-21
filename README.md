@@ -96,8 +96,10 @@ A control rail beside the canvas: queue SVG files, choose the pencil or the
 brush, set the duration and frame rate, pick the paper and ink colours, and press
 **Draw**. The drawing appears in the panel rather than a throwaway window, and it
 stays there — a finished render never dismisses it, and only closing the window
-ends the session. **Stop** halts a drawing at once and leaves what was drawn;
-**Export PNG** saves the canvas.
+ends the session. **Draw all in sequence** turns the queue into a playlist,
+drawing each file in turn and clearing between them. **Stop** halts at once and
+leaves what was drawn; **Save PNG** and **Save GIF** export the still or the
+animation.
 
 The whole thing runs on one thread. The render is paced by a clock that pumps the
 event loop between frames instead of sleeping (`gui/tk_canvas.py`), so the
@@ -558,8 +560,9 @@ fine. See `CONTRIBUTING.md`.
 - [ ] CSS stylesheet and selector support
 - [ ] `stroke-dasharray`
 - [x] Animated GIF export of the drawing, from the CLI and the studio
+- [x] A file queue that draws in sequence, in the studio
 - [ ] MP4 / WebM video export (ffmpeg) for longer, smaller animations
-- [ ] A file queue that draws in sequence, for playlists and batches
+- [ ] Batch export of a folder of SVGs to GIFs from the command line
 - [ ] Pause / resume and zoom / pan controls
 
 ## Contributing
