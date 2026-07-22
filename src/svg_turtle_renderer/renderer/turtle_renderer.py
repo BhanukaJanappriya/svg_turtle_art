@@ -436,7 +436,11 @@ class TurtleCanvas:
             # EPS is vector: rasterising at 2x and downsampling is the cheapest
             # way to get an antialiased result out of Ghostscript. `scale` is
             # specific to EpsImageFile, which is what Image.open returns here.
-            opened.load(scale=2)  # type: ignore[call-arg]
+            # It is called through an Any binding so the keyword does not depend
+            # on whether Pillow's stubs are installed -- which keeps mypy happy
+            # both with the export extra and without it.
+            eps_image: Any = opened
+            eps_image.load(scale=2)
             image = opened.convert("RGB").resize((width, height), Image.Resampling.LANCZOS)
             image.save(destination)
         except Exception as exc:

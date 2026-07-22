@@ -21,7 +21,11 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install -e ".[dev]"
+      # The export extra (Pillow) is installed so mypy type-checks the raster
+      # and export code against the real library. Without it a Pillow-specific
+      # `type: ignore` becomes unused, which warn_unused_ignores turns into an
+      # error.
+      - run: pip install -e ".[dev,export]"
       - name: ruff check
         run: ruff check .
       - name: ruff format
