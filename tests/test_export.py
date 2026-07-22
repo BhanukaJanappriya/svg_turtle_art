@@ -60,7 +60,6 @@ class TestStillExport:
 
 class TestAnimationExport:
     def test_a_gif_has_many_progressive_frames(self, svg_file, tmp_path):
-        import numpy as np
         from PIL import Image
 
         path = svg_file(SQUARE)
@@ -82,7 +81,8 @@ class TestAnimationExport:
 
         def ink(index):
             gif.seek(index)
-            return int((np.asarray(gif.copy().convert("L")) < 128).sum())
+            # Dark levels of the greyscale histogram: the ink laid down so far.
+            return sum(gif.copy().convert("L").histogram()[:128])
 
         # The finished drawing has more ink than the first frame.
         assert ink(gif.n_frames - 1) > ink(0)

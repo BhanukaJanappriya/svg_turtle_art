@@ -114,7 +114,6 @@ class TestOutput:
 
     def test_a_gif_grows_darker_as_it_is_drawn(self, tmp_path):
         # Each captured frame adds a line, so later frames have more ink.
-        import numpy as np
         from PIL import Image
 
         canvas = RasterCanvas(100, 100, WHITE, supersample=1, capture_frames=True)
@@ -125,11 +124,12 @@ class TestOutput:
 
         gif = Image.open(written)
 
-        def black(index):
+        def dark_pixels(index):
             gif.seek(index)
-            return int((np.asarray(gif.copy().convert("L")) < 128).sum())
+            # The histogram of the greyscale frame; levels 0-127 are the dark ink.
+            return sum(gif.copy().convert("L").histogram()[:128])
 
-        assert black(gif.n_frames - 1) > black(0)
+        assert dark_pixels(gif.n_frames - 1) > dark_pixels(0)
 
     def test_saving_a_gif_with_no_frames_is_an_error(self, tmp_path):
         canvas = RasterCanvas(80, 80, WHITE, capture_frames=True)
