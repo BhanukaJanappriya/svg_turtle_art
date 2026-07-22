@@ -25,7 +25,7 @@ classifiers = [
 dependencies = ["tqdm>=4.65"]
 
 [project.optional-dependencies]
-export = ["numpy>=1.20", "Pillow>=10.0"]
+export = ["Pillow>=10.0"]
 dev = [
     "pytest>=7.4",
     "pytest-cov>=4.1",
