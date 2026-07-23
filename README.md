@@ -10,9 +10,6 @@ python main.py --gui                # open the desktop studio
 
 ![Sample render](docs/images/showcase.png)
 
-*`assets/sample.svg` — a single path of 61 rings, 2,670 vertices, drawn by turtle
-in 11 ms. Pixel-identical to an independent nonzero-winding rasteriser.*
-
 ---
 
 ## Contents
